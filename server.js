@@ -14,6 +14,7 @@ const express = require('express');
 
 const cache = require('./lib/cache');
 const yahoo = require('./lib/yahoo');
+const td = require('./lib/twelvedata');
 const nse = require('./lib/nse');
 const mock = require('./lib/mock');
 const news = require('./lib/news');
@@ -128,14 +129,21 @@ api.get('/history', async (req, res) => {
     const { data, cached, stale } = await cache.wrap(key, TTL.history, async () => {
       const r = await resolve({
         forceMock: wantsMock(req),
-        live: () => yahoo.chart(symbol, { range, interval, events }),
+        live: async () => {
+          // Prefer Twelve Data (real, unblocked) when a key is set; else Yahoo.
+          if (td.enabled()) {
+            try { return { ...(await td.chart(symbol, { range, interval })), _source: 'twelvedata' }; }
+            catch (_) { /* fall through to Yahoo */ }
+          }
+          return { ...(await yahoo.chart(symbol, { range, interval, events })), _source: 'yahoo' };
+        },
         fake: () => mock.chart(symbol, { range, interval }),
       });
       return { ...r.data, __mock: r.mock, __fallbackReason: r.fallbackReason };
     });
-    const { __mock, __fallbackReason, ...payload } = data;
+    const { __mock, __fallbackReason, _source, ...payload } = data;
     res.json({
-      symbol, source: __mock ? 'mock' : 'yahoo', mock: !!__mock,
+      symbol, source: __mock ? 'mock' : (_source || 'yahoo'), mock: !!__mock,
       cached: !!cached, stale: !!stale, fallbackReason: __fallbackReason, ...payload,
     });
   } catch (err) {
@@ -294,7 +302,10 @@ api.get('/quote', async (req, res) => {
       if (MOCK_MODE === 'on' || wantsMock(req)) {
         return { ...mock.quote(symbol), mock: true };
       }
-      // 1) NSE  2) Yahoo  3) mock (auto only)
+      // 1) Twelve Data  2) NSE  3) Yahoo  4) mock (auto only)
+      if (td.enabled()) {
+        try { return { ...(await td.quote(symbol)), mock: false }; } catch (_) { /* fall through */ }
+      }
       try {
         return { ...(await nse.quote(symbol)), mock: false };
       } catch (nseErr) {
