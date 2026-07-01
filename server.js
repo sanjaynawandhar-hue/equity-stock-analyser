@@ -39,7 +39,7 @@ const TTL = {
 
 // Build a live-quote object from Yahoo chart meta (fallback source).
 async function yahooQuote(symbol) {
-  const c = await yahoo.chart(symbol, { range: '5d', interval: '1d', events: '' });
+  const c = await yahoo.chart(symbol, { range: '5d', interval: '1d', events: '', proxy: true });
   const last = c.meta.regularMarketPrice ?? (c.candles.at(-1) && c.candles.at(-1).close);
   const prev = c.meta.previousClose ?? (c.candles.at(-2) && c.candles.at(-2).close);
   const change = last != null && prev != null ? Math.round((last - prev) * 100) / 100 : null;
@@ -146,7 +146,7 @@ api.get('/history', async (req, res) => {
             try { return { ...(await td.chart(symbol, { range, interval })), _source: 'twelvedata' }; }
             catch (_) { /* fall through to Yahoo */ }
           }
-          return { ...(await yahoo.chart(symbol, { range, interval, events })), _source: 'yahoo' };
+          return { ...(await yahoo.chart(symbol, { range, interval, events, proxy: true })), _source: 'yahoo' };
         },
         fake: () => mock.chart(symbol, { range, interval }),
       });

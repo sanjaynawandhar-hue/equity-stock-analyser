@@ -749,7 +749,7 @@
     const chg = (quote && quote.change) ?? (fund && fund.change);
     const chgPct = (quote && quote.changePercent) ?? (fund && fund.changePercent != null ? fund.changePercent * 100 : null);
     const up = (chg ?? 0) >= 0;
-    const isMock = (quote && quote.mock) || (fund && fund.mock);
+    const priceMock = quote ? !!quote.mock : !!(fund && fund.mock); // is the PRICE demo?
     const sector = fund && fund.sector;
     const industry = (fund && fund.industry) || (quote && quote.industry);
     const asOf = (quote && quote.asOf) || (fund && fund.asOf);
@@ -793,7 +793,9 @@
       <div class="freshness">
         <span class="dot"></span>
         as of ${asOf ? new Date(asOf).toLocaleString('en-IN') : 'just now'}
-        ${isMock ? '<span class="badge-demo">DEMO DATA</span>' : ''}
+        ${priceMock
+          ? '<span class="badge-demo">DEMO PRICE</span>'
+          : '<span class="badge-live">🟢 LIVE · delayed</span>'}
       </div>`;
     report.appendChild(card);
 

@@ -580,6 +580,10 @@ a:hover { text-decoration: underline; }
   font-size: 11px; font-weight: 600; color: var(--hold);
   padding: 2px 9px; border: 1px solid var(--hold); border-radius: var(--r-pill);
 }
+.badge-live {
+  font-size: 11px; font-weight: 600; color: var(--up);
+  padding: 2px 9px; border: 1px solid var(--up); border-radius: var(--r-pill);
+}
 
 .error-card { border-color: var(--sell); }
 .error-card h3 { color: var(--sell); }
