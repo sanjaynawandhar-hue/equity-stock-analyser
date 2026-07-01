@@ -190,8 +190,55 @@
     renderComparison(symbol);
     renderFinancials(symbol);
     renderShareholding(symbol);
+    renderAnnualReports(symbol, fund);
     renderPeers(symbol);
     renderNews(symbol);
+  }
+
+  // -------------------------------------------------- annual reports (5y)
+  async function renderAnnualReports(symbol, fund) {
+    const bare = symbols_strip(symbol);
+    const company = (fund && fund.name) || bare;
+    const card = el('div', 'card section fade-in');
+    card.innerHTML = `
+      <div class="section__head">
+        <div class="section__title">📑 Annual Reports</div>
+        <span class="muted" style="font-size:12.5px">Last 5 financial years</span>
+      </div>
+      <div id="arBody"><div class="skeleton" style="height:120px;border-radius:12px"></div></div>`;
+    report.appendChild(card);
+    const body = $('#arBody', card);
+
+    // Reuse the (cached) financials endpoint for the per-year revenue/profit snapshot.
+    let fin = null;
+    try { fin = await api('/api/financials?symbol=' + encodeURIComponent(symbol)); } catch (_) { /* links still work */ }
+
+    const annual = (fin && Array.isArray(fin.annual)) ? fin.annual.slice(-5).reverse() : [];
+    const thisYear = new Date().getFullYear();
+    const years = annual.length
+      ? annual.map((a) => ({ period: a.period, revenue: a.revenue, profit: a.profit }))
+      : [1, 2, 3, 4, 5].map((i) => ({ period: String(thisYear - i) }));
+
+    const gSearch = (y) => 'https://www.google.com/search?q=' +
+      encodeURIComponent(`${company} annual report ${y} pdf`);
+    const screener = 'https://www.screener.in/company/' + encodeURIComponent(bare) + '/';
+    const bse = 'https://www.bseindia.com/corporates/annualReports.aspx';
+
+    body.innerHTML = `
+      <div class="ar-grid">
+        ${years.map((y) => `
+          <div class="arcard">
+            <span class="arcard__yr">FY ${esc(y.period)}</span>
+            ${y.revenue != null ? `<span class="arcard__stat">Revenue <b>${fmtCrShort(y.revenue)}</b></span>` : ''}
+            ${y.profit != null ? `<span class="arcard__stat">Net profit <b>${fmtCrShort(y.profit)}</b></span>` : ''}
+            <a class="arcard__link" href="${gSearch(y.period)}" target="_blank" rel="noopener noreferrer">📄 Find report ↗</a>
+          </div>`).join('')}
+      </div>
+      <div class="ar-actions">
+        <a class="btn btn--primary" href="${screener}" target="_blank" rel="noopener noreferrer">📚 All annual reports (Screener.in) ↗</a>
+        <a class="btn" href="${bse}" target="_blank" rel="noopener noreferrer">🏛️ BSE filings ↗</a>
+      </div>
+      <p class="ar-note">Reports open on external sites (Screener.in aggregates the official BSE-filed PDFs). Figures shown are ${fin && fin.mock ? 'demo values' : 'from the financials feed'} — always verify against the official report.</p>`;
   }
 
   // ---------------------------------------------- stock vs Nifty 50 overlay
