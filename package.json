@@ -1,0 +1,22 @@
+{
+  "name": "equity-stock-analyser",
+  "version": "1.0.0",
+  "description": "Equity Stock Analyser — a single-page web app for Indian stock markets (NSE/BSE) with an Express proxy backend.",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "postinstall": "node scripts/copy-vendor.js"
+  },
+  "author": "Sanjay Navandar (@professorSK)",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "html2canvas": "^1.4.1",
+    "lightweight-charts": "^4.2.3"
+  }
+}

@@ -1,0 +1,36 @@
+# Claude Code — machine-specific local settings
+.claude/settings.local.json
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor / IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment & secrets
+.env
+.env.*
+*.local
+
+# Logs
+*.log
+logs/
+
+# Dependencies / build output
+node_modules/
+dist/
+build/
+
+# Generated vendor libs (copied from node_modules by scripts/copy-vendor.js)
+public/vendor/
+
+# Backend response cache
+cache/
+__pycache__/
+*.py[cod]
+.venv/
+venv/

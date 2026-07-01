@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Equity Stock Analyser · by Sanjay Navandar</title>
+  <meta name="description" content="Analyse Indian stocks (NSE/BSE) — prices, fundamentals, news and buy/sell signals." />
+  <meta name="theme-color" content="#0a0d14" />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+
+  <!-- Fonts: Poppins for headings, Inter for body -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@500;600;700&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="/css/styles.css" />
+  <!-- Load theme before first paint to prevent a flash of the wrong theme. -->
+  <script src="/js/theme.js"></script>
+</head>
+<body>
+  <div id="loadbar" class="loadbar" aria-hidden="true"></div>
+  <div id="app">
+    <header class="topnav">
+      <div class="brand">
+        <div class="brand__logo">📈</div>
+        <div class="brand__text">
+          <h1 class="brand__title">Equity Stock Analyser</h1>
+          <span class="brand__subtitle">by Sanjay Navandar</span>
+          <span class="brand__made">made with 🔥 by
+            <a href="https://instagram.com/professorSK" target="_blank" rel="noopener noreferrer">@professorSK</a>
+          </span>
+        </div>
+      </div>
+
+      <nav class="navtabs" id="navtabs" role="tablist">
+        <button class="navtab active" data-view="home" role="tab">
+          <span class="navtab__ico">🔎</span><span class="navtab__label">Analyser</span>
+        </button>
+        <button class="navtab" data-view="watchlist" role="tab">
+          <span class="navtab__ico">⭐</span><span class="navtab__label">Watchlist</span>
+          <span class="navtab__count" id="wlCount">0</span>
+        </button>
+      </nav>
+
+      <div class="topnav__actions">
+        <button class="theme-toggle" type="button" aria-label="Toggle theme" aria-pressed="false">
+          <span class="theme-toggle__track"><span>🌙</span><span>☀️</span></span>
+          <span class="theme-toggle__thumb"></span>
+        </button>
+      </div>
+    </header>
+
+    <main class="container">
+      <!-- ============================ ANALYSER VIEW ============================ -->
+      <section id="view-home" class="view active" role="tabpanel">
+        <div class="search-wrap">
+          <div class="search" role="search">
+            <span class="search__icon">🔍</span>
+            <input id="searchInput" class="search__input" type="text" autocomplete="off"
+                   spellcheck="false" placeholder="Search a stock — RELIANCE, TCS, INFY…"
+                   aria-label="Search stock" aria-autocomplete="list" />
+            <button id="searchGo" class="search__go" type="button">Analyse</button>
+            <div id="suggest" class="suggest" role="listbox"></div>
+          </div>
+        </div>
+
+        <div id="recents" class="recents" hidden>
+          <div class="recents__head">
+            <span class="recents__title">Recently searched</span>
+            <button id="recentsClear" class="recents__clear" type="button">Clear</button>
+          </div>
+          <div id="recentsRow" class="recents__row"></div>
+        </div>
+
+        <section id="report" class="report" aria-live="polite"></section>
+
+        <section id="welcome" class="placeholder-card fade-in">
+          <h2>Search any Indian stock 🔎📈</h2>
+          <p class="dim">Type a company name or NSE ticker above to pull its 10-year
+             chart, fundamentals, news and a buy/sell/hold signal. Try
+             <b>RELIANCE</b>, <b>TCS</b> or <b>INFY</b>.</p>
+          <p class="muted" style="font-size:12px; margin-top:16px;">
+            Not financial advice · Data may be delayed · Consult a SEBI-registered advisor before investing.
+          </p>
+        </section>
+      </section>
+
+      <!-- ============================ WATCHLIST VIEW ============================ -->
+      <section id="view-watchlist" class="view" role="tabpanel">
+        <div class="wl-head">
+          <h2>⭐ Your Watchlist</h2>
+        </div>
+        <div id="wlBody"></div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      Built by Sanjay Navandar ·
+      <a href="https://instagram.com/professorSK" target="_blank" rel="noopener noreferrer">@professorSK</a>
+    </footer>
+  </div>
+
+  <script src="/vendor/lightweight-charts.standalone.production.js"></script>
+  <script src="/vendor/html2canvas.min.js"></script>
+  <script src="/js/store.js"></script>
+  <script src="/js/charts.js"></script>
+  <script src="/js/export.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>

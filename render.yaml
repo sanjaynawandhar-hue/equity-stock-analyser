@@ -1,0 +1,16 @@
+# Render.com Blueprint — deploys the Equity Stock Analyser as a free web service.
+# In Render: New + → "Blueprint" → pick this repo, or just create a Web Service
+# and Render will auto-detect Node (build: npm install, start: npm start).
+services:
+  - type: web
+    name: equity-stock-analyser
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      # Data policy: 'auto' = try live Yahoo/NSE, fall back to demo data.
+      - key: ESA_MOCK
+        value: auto
