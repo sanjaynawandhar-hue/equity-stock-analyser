@@ -103,8 +103,19 @@ app.use((req, _res, next) => {
 // --- API routes (populated in later build steps) --------------------------
 const api = express.Router();
 
-api.get('/health', (_req, res) => {
-  res.json({ ok: true, service: 'equity-stock-analyser', time: new Date().toISOString() });
+api.get('/health', async (req, res) => {
+  const out = {
+    ok: true, service: 'equity-stock-analyser', time: new Date().toISOString(),
+    build: 'td1', tdEnabled: td.enabled(),
+  };
+  // /api/health?td=1 runs a one-off Twelve Data test to surface any error.
+  if (req.query.td === '1' && td.enabled()) {
+    try {
+      const q = await td.quote('RELIANCE.NS');
+      out.tdTest = { ok: true, price: q.lastPrice, name: q.companyName };
+    } catch (e) { out.tdTest = { ok: false, error: e.message }; }
+  }
+  res.json(out);
 });
 
 // --- Search: autocomplete + fuzzy "did you mean" -------------------------
