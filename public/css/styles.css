@@ -359,6 +359,20 @@ a:hover { text-decoration: underline; }
 .placeholder-card { max-width: 720px; margin: 40px auto; }
 .placeholder-card h2 { margin-bottom: 10px; }
 
+/* ---------------------------------------------------- Demo-mode banner */
+.demo-banner {
+  display: flex; align-items: flex-start; gap: 9px;
+  margin: 14px 2px 0; padding: 10px 14px;
+  background: rgba(255, 176, 32, 0.10);
+  border: 1px solid rgba(255, 176, 32, 0.35);
+  border-radius: var(--r-md);
+  font-size: 12.5px; line-height: 1.45; color: var(--text-dim);
+}
+.demo-banner b { color: var(--hold); font-weight: 700; }
+.demo-banner__ic {
+  flex: none; color: var(--hold); font-size: 14px; font-weight: 700; line-height: 1.3;
+}
+
 /* ---------------------------------------------------------- Search bar */
 .search-wrap {
   position: sticky;

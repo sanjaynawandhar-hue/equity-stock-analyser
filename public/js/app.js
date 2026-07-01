@@ -141,6 +141,9 @@
   // ================================================================ REPORT
   const report = $('#report');
   const welcome = $('#welcome');
+  const demoBanner = $('#demoBanner');
+  // Show the demo notice while data is sample; hide it if real data ever flows.
+  const setDemoMode = (isMock) => { if (demoBanner) demoBanner.style.display = isMock ? 'flex' : 'none'; };
   const loadbar = $('#loadbar');
   const showLoad = () => loadbar && loadbar.classList.add('on');
   const hideLoad = () => loadbar && loadbar.classList.remove('on');
@@ -183,6 +186,7 @@
     }
 
     const name = (fund && fund.name) || (quote && quote.companyName) || null;
+    setDemoMode((quote && quote.mock) || (fund && fund.mock));
     if (window.ESAStore) ESAStore.addRecent(symbol, name);
     renderHeader(symbol, quote, fund);
     renderPriceSection(symbol);
