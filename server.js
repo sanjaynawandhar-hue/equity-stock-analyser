@@ -292,37 +292,34 @@ api.get('/peers', async (req, res) => {
 
   try {
     const { data, cached } = await cache.wrap(key, TTL.fundamentals, async () => {
-      // Determine the sector: dictionary first, then the REAL sector via the
-      // search endpoint (proxy), and only mock as a last resort.
+      // Sector label: dictionary first, then real sector via search.
       let sector = symbols.sectorOf(symbol);
       if (!sector && !forceMock) {
         try { const info = await yahoo.assetInfo(symbol); sector = info && info.sector; } catch (_) { /* ignore */ }
       }
-      if (!sector) {
-        try {
-          const f = await resolve({ forceMock, live: () => yahoo.quoteSummary(symbol), fake: () => mock.quoteSummary(symbol) });
-          sector = f.data.sector;
-        } catch (_) { /* leave null */ }
-      }
-      const peerList = symbols.peers(symbol, 4, sector);
       const self = symbols.stripSuffix(symbol);
-      const targets = [{ symbol: self, name: null, isSelf: true }, ...peerList.map((p) => ({ symbol: p.symbol, name: p.name, isSelf: false }))];
 
-      const rows = await Promise.all(targets.map(async (t) => {
+      // Preferred: REAL peer table from Screener (real P/E, market cap, ROCE).
+      if (!forceMock) {
         try {
-          // Fetch with a full Yahoo symbol so profiles resolve; display the bare ticker.
-          const m = await peerMetrics(toYahooSymbol(t.symbol), forceMock);
-          return { ...m, symbol: t.symbol, name: t.name || m.name || t.symbol, isSelf: t.isSelf };
-        } catch (_) {
-          return { symbol: t.symbol, name: t.name || t.symbol, peRatio: null, marketCap: null, oneYearReturn: null, isSelf: t.isSelf, error: true };
-        }
-      }));
-      return { sector: sector || null, rows };
+          const s = await getScreener(symbol);
+          if (s.peers && s.peers.length) {
+            let rows = s.peers.map((p) => ({ ...p, isSelf: p.symbol === self, mock: false }));
+            rows.sort((a, b) => (b.isSelf ? 1 : 0) - (a.isSelf ? 1 : 0)); // self first
+            return { sector: sector || null, rows: rows.slice(0, 6), source: 'screener' };
+          }
+        } catch (_) { /* fall back below */ }
+      }
+
+      // Fallback: same-sector companies from the dictionary (names only, no fake metrics).
+      const peerList = symbols.peers(symbol, 5, sector);
+      const rows = [{ symbol: self, name: null, isSelf: true }, ...peerList.map((p) => ({ symbol: p.symbol, name: p.name, isSelf: false }))]
+        .map((t) => ({ symbol: t.symbol, name: t.name || t.symbol, peRatio: null, marketCap: null, roce: null, isSelf: t.isSelf, mock: true }));
+      return { sector: sector || null, rows, source: 'dictionary' };
     });
     res.json({ symbol, cached: !!cached, ...data });
   } catch (err) {
-    const rl = err && (err.rateLimited || /429/.test(err.message || ''));
-    res.status(rl ? 429 : 502).json({ error: rl ? 'rate_limited' : 'peers_fetch_failed', symbol, message: err.message });
+    res.status(502).json({ error: 'peers_fetch_failed', symbol, message: err.message });
   }
 });
 

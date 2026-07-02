@@ -399,18 +399,16 @@
     if (rows.length < 2) { body.innerHTML = '<p class="muted" style="padding:18px 4px">No same-sector peers found for this stock.</p>'; return; }
     if (data.sector) $('#peerSector', card).textContent = data.sector;
 
-    // Comparative metrics (P/E, market cap, 1Y return) come from the demo feed,
-    // so we don't show fabricated numbers — show "—" and keep the peer list
-    // (real, same-sector companies) useful for discovery.
+    // Real metrics when available (Screener); "—" for the dictionary fallback.
     const metric = (r, val) => (r.mock ? '<span class="muted">—</span>' : val);
-    const retCell = (v) => v == null ? '<span class="muted">—</span>'
-      : `<span class="${v >= 0 ? 'up' : 'down'}">${v >= 0 ? '▲' : '▼'} ${Math.abs(v).toFixed(1)}%</span>`;
+    const roceCell = (v) => v == null ? '—'
+      : `<span class="${v >= 0 ? 'up' : 'down'}">${(v * 100).toFixed(1)}%</span>`;
     const anyReal = rows.some((r) => !r.mock);
 
     body.innerHTML = `
       <div class="peer-scroll">
         <table class="peer-table">
-          <thead><tr><th>Company</th><th>P/E</th><th>Market Cap</th><th>1Y Return</th></tr></thead>
+          <thead><tr><th>Company</th><th>P/E</th><th>Market Cap</th><th>ROCE</th></tr></thead>
           <tbody>
             ${rows.map((r) => `
               <tr class="${r.isSelf ? 'peer-row-self' : ''}" data-sym="${esc(r.symbol)}">
@@ -418,12 +416,12 @@
                     <div class="peer-name">${esc(r.name || '')}</div></td>
                 <td>${metric(r, r.peRatio == null ? '—' : fmtNum(r.peRatio))}</td>
                 <td>${metric(r, fmtCrShort(r.marketCap))}</td>
-                <td>${metric(r, retCell(r.oneYearReturn))}</td>
+                <td>${metric(r, roceCell(r.roce))}</td>
               </tr>`).join('')}
           </tbody>
         </table>
       </div>
-      ${anyReal ? '' : '<p class="ar-note" style="margin-top:10px">Same-sector competitors (tap any to analyse). Comparative metrics aren’t available from our free data sources.</p>'}`;
+      ${anyReal ? '' : '<p class="ar-note" style="margin-top:10px">Same-sector competitors (tap any to analyse). Comparative metrics aren’t available for this stock.</p>'}`;
 
     // Row click loads that peer (except the current stock).
     body.querySelectorAll('tbody tr').forEach((tr) => tr.addEventListener('click', () => {
