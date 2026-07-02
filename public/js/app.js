@@ -62,6 +62,7 @@
   let items = [];        // current suggestion rows
   let activeIdx = -1;
   let suggestion = null; // "did you mean"
+  let searchingWeb = false; // phase-2 live search in flight
 
   function closeSuggest() { suggestBox.classList.remove('open'); activeIdx = -1; }
 
@@ -72,7 +73,7 @@
         `Did you mean <b data-sym="${esc(suggestion.symbol)}">${esc(suggestion.symbol)}</b> — ${esc(suggestion.name)}?`);
       suggestBox.appendChild(dym);
     }
-    if (!items.length && !suggestion) {
+    if (!items.length && !suggestion && !searchingWeb) {
       suggestBox.appendChild(el('div', 'suggest__empty', 'No matches. Press Analyse to try anyway.'));
     }
     items.forEach((m, i) => {
@@ -85,18 +86,39 @@
          ${m.sector ? `<span class="suggest__sector">${esc(m.sector)}</span>` : ''}`;
       suggestBox.appendChild(row);
     });
+    if (searchingWeb) {
+      suggestBox.appendChild(el('div', 'suggest__loading', '🔎 Searching all listed stocks…'));
+    }
     suggestBox.classList.add('open');
   }
 
   const doSearch = debounce(async (q) => {
     if (!q.trim()) { closeSuggest(); return; }
     try {
+      // Phase 1: instant curated results.
       const data = await api('/api/search?q=' + encodeURIComponent(q));
       items = data.matches || [];
       suggestion = data.suggestion || null;
       activeIdx = -1;
+
+      // Phase 2: if curated results are sparse, augment with a live web search.
+      const needWeb = q.trim().length >= 3 && items.length < 6;
+      searchingWeb = needWeb;
       renderSuggest();
-    } catch (_) { closeSuggest(); }
+
+      if (needWeb) {
+        try {
+          const web = await api('/api/search?q=' + encodeURIComponent(q) + '&web=1');
+          if (input.value.trim() === q.trim()) {        // ignore if query changed meanwhile
+            items = web.matches || items;
+            suggestion = web.suggestion || null;
+            activeIdx = -1;
+          }
+        } catch (_) { /* keep curated results */ }
+        searchingWeb = false;
+        if (input.value.trim() === q.trim()) renderSuggest();
+      }
+    } catch (_) { searchingWeb = false; closeSuggest(); }
   }, 130);
 
   input.addEventListener('input', (e) => doSearch(e.target.value));

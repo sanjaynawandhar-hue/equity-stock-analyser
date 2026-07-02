@@ -35,6 +35,7 @@ const TTL = {
   quote: 5 * 60 * 1000,             // live quote
   shareholding: 24 * 60 * 60 * 1000, // shareholding changes quarterly
   news: 30 * 60 * 1000,             // news feed
+  search: 60 * 60 * 1000,           // symbol search results
 };
 
 // Build a live-quote object from Yahoo chart meta (fallback source).
@@ -118,11 +119,32 @@ api.get('/health', async (req, res) => {
   res.json(out);
 });
 
-// --- Search: autocomplete + fuzzy "did you mean" -------------------------
-// GET /api/search?q=rel
-api.get('/search', (req, res) => {
-  const { matches, suggestion } = symbols.search(req.query.q, 8);
-  res.json({ query: req.query.q || '', matches, suggestion });
+// --- Search: curated autocomplete + fuzzy, optionally augmented with a live
+//     Yahoo symbol search (covers EVERY listed stock). ?web=1 does the lookup.
+// GET /api/search?q=rel[&web=1]
+api.get('/search', async (req, res) => {
+  const q = String(req.query.q || '');
+  const local = symbols.search(q, 8);
+  const result = { query: q, matches: local.matches, suggestion: local.suggestion };
+
+  if (req.query.web === '1' && q.trim().length >= 2) {
+    try {
+      const key = `symsearch:${q.trim().toLowerCase()}`;
+      const { data: web } = await cache.wrap(key, TTL.search, () => yahoo.searchSymbols(q));
+      const seen = new Set(result.matches.map((m) => m.symbol.replace(/\.(NS|BO)$/, '').toUpperCase()));
+      for (const w of web) {
+        const bare = w.symbol.replace(/\.(NS|BO)$/, '').toUpperCase();
+        if (seen.has(bare)) continue;                  // skip dups (prefer curated / NSE)
+        seen.add(bare);
+        // NSE stocks resolve from the bare ticker; keep .BO explicit for BSE-only.
+        result.matches.push({ symbol: w.symbol.endsWith('.BO') ? w.symbol : bare, name: w.name, sector: w.exchange });
+      }
+      result.matches = result.matches.slice(0, 10);
+      if (web.length) result.suggestion = null;        // real hits found; drop the "did you mean"
+      result.web = true;
+    } catch (_) { /* keep curated-only results */ }
+  }
+  res.json(result);
 });
 
 // --- Yahoo Finance: historical OHLCV + corporate-action events ------------
