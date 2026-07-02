@@ -60,6 +60,7 @@ async function yahooQuote(symbol) {
     dayHigh: lastC && lastC.high,
     dayLow: lastC && lastC.low,
     previousClose: prev,
+    volume: lastC && lastC.volume,
     vwap: null,
     yearHigh: c.meta.fiftyTwoWeekHigh,
     yearLow: c.meta.fiftyTwoWeekLow,

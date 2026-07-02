@@ -612,6 +612,13 @@ a:hover { text-decoration: underline; }
 .legend-swatch { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
 .chart-host { width: 100%; min-height: 300px; }
 
+/* Honest "data not available" state (used instead of fabricated numbers) */
+.unavail { text-align: center; padding: 28px 18px; }
+.unavail__ic { font-size: 30px; margin-bottom: 8px; opacity: 0.85; }
+.unavail p { margin: 4px 0; font-size: 13.5px; color: var(--text-dim); }
+.unavail p.muted { font-size: 12.5px; }
+.unavail a { color: var(--accent-2); }
+
 .cmp-legend { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; font-size: 13px; color: var(--text-dim); }
 .cmp-legend span { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
 .cmp-diff { padding: 3px 11px; border-radius: var(--r-pill); font-size: 12px; }

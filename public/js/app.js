@@ -33,6 +33,12 @@
     return '₹' + fmtNum(n, 0);
   }
   function fmtPct(n, dp = 2) { return n == null ? '—' : `${Number(n).toFixed(dp)}%`; }
+  function fmtVol(n) {
+    if (n == null || Number.isNaN(n)) return '—';
+    if (n >= 1e7) return (n / 1e7).toFixed(2) + ' Cr';
+    if (n >= 1e5) return (n / 1e5).toFixed(2) + ' L';
+    return Number(n).toLocaleString('en-IN');
+  }
   const debounce = (fn, ms) => {
     let t;
     const wrapped = (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
@@ -393,8 +399,13 @@
     if (rows.length < 2) { body.innerHTML = '<p class="muted" style="padding:18px 4px">No same-sector peers found for this stock.</p>'; return; }
     if (data.sector) $('#peerSector', card).textContent = data.sector;
 
+    // Comparative metrics (P/E, market cap, 1Y return) come from the demo feed,
+    // so we don't show fabricated numbers — show "—" and keep the peer list
+    // (real, same-sector companies) useful for discovery.
+    const metric = (r, val) => (r.mock ? '<span class="muted">—</span>' : val);
     const retCell = (v) => v == null ? '<span class="muted">—</span>'
       : `<span class="${v >= 0 ? 'up' : 'down'}">${v >= 0 ? '▲' : '▼'} ${Math.abs(v).toFixed(1)}%</span>`;
+    const anyReal = rows.some((r) => !r.mock);
 
     body.innerHTML = `
       <div class="peer-scroll">
@@ -405,13 +416,14 @@
               <tr class="${r.isSelf ? 'peer-row-self' : ''}" data-sym="${esc(r.symbol)}">
                 <td><span class="peer-sym">${esc(r.symbol)}</span>${r.isSelf ? '<span class="peer-self-tag">THIS</span>' : ''}
                     <div class="peer-name">${esc(r.name || '')}</div></td>
-                <td>${r.peRatio == null ? '—' : fmtNum(r.peRatio)}</td>
-                <td>${fmtCrShort(r.marketCap)}</td>
-                <td>${retCell(r.oneYearReturn)}</td>
+                <td>${metric(r, r.peRatio == null ? '—' : fmtNum(r.peRatio))}</td>
+                <td>${metric(r, fmtCrShort(r.marketCap))}</td>
+                <td>${metric(r, retCell(r.oneYearReturn))}</td>
               </tr>`).join('')}
           </tbody>
         </table>
-      </div>`;
+      </div>
+      ${anyReal ? '' : '<p class="ar-note" style="margin-top:10px">Same-sector competitors (tap any to analyse). Comparative metrics aren’t available from our free data sources.</p>'}`;
 
     // Row click loads that peer (except the current stock).
     body.querySelectorAll('tbody tr').forEach((tr) => tr.addEventListener('click', () => {
@@ -492,14 +504,15 @@
       : '<span class="ic muted">•</span>';
     const li = (r) => `<li>${icon(r.good)}<span>${esc(r.text)}</span></li>`;
 
-    const fReasons = fundamentalReasons(fund);
+    // Only include fundamental reasons when the fundamentals are REAL, never fabricated.
+    const fReasons = (fund && !fund.mock) ? fundamentalReasons(fund) : [];
     const positives = [...s.reasons, ...fReasons].filter((r) => r.good === true).length;
     const negatives = [...s.reasons, ...fReasons].filter((r) => r.good === false).length;
     const lead = s.action === 'BUY'
-      ? `The technical setup is <b class="up">bullish</b> — here's the case, backed by the fundamentals:`
+      ? `The technical setup is <b class="up">bullish</b>. Here's the read on the price action:`
       : s.action === 'SELL'
-        ? `The technical timing looks <b class="down">bearish</b> — weigh that against the business fundamentals below:`
-        : `The technicals are <b>mixed</b> — here's the case on both sides:`;
+        ? `The technical timing looks <b class="down">bearish</b>. Here's the read on the price action:`
+        : `The technicals are <b>mixed</b>. Here's the read on the price action:`;
 
     $('#recoBody', recoCard).innerHTML = `
       <div class="reco">
@@ -521,7 +534,7 @@
             <div class="reco__grouphdr">🧾 Fundamentals</div>
             <ul class="reco__reasons">${fReasons.map(li).join('')}</ul>` : ''}
 
-          <p class="reco__disclaimer">⚠️ Rule-based signal combining technicals & fundamentals — <b>not financial advice</b>. Data may be delayed. Consult a SEBI-registered advisor before investing.</p>
+          <p class="reco__disclaimer">⚠️ Rule-based ${fReasons.length ? 'technical & fundamental' : 'technical'} signal — <b>not financial advice</b>. Data may be delayed. Consult a SEBI-registered advisor before investing.</p>
         </div>
       </div>`;
 
@@ -570,25 +583,40 @@
     card.innerHTML = `
       <div class="section__head">
         <div class="section__title">💰 Revenue & Profit</div>
-        <div class="section__controls">
-          <div class="segmented" data-group="fin">
-            <button data-fin="annual" class="active">Annual</button>
-            <button data-fin="quarterly">Quarterly</button>
-          </div>
-        </div>
+        <div class="section__controls" id="finControls"></div>
       </div>
       <div class="chart-host" id="finHost" style="min-height:260px"></div>
-      <div class="bars-legend">
-        <span><i class="legend-dot" style="background:var(--accent-2)"></i> Revenue</span>
-        <span><i class="legend-dot" style="background:var(--buy)"></i> Net Profit</span>
-      </div>`;
+      <div class="bars-legend" id="finLegend"></div>`;
     report.appendChild(card);
     const finHost = $('#finHost', card);
     finHost.innerHTML = '<div class="skeleton" style="height:260px;border-radius:12px"></div>';
 
     let data;
     try { data = await api('/api/financials?symbol=' + encodeURIComponent(symbol)); }
-    catch (_) { finHost.innerHTML = '<p class="muted" style="padding:24px 8px">Financials unavailable.</p>'; return; }
+    catch (_) { data = null; }
+
+    // Never show fabricated revenue/profit. If the feed is demo/unavailable,
+    // show an honest note pointing to the real annual reports below.
+    if (!data || data.mock || !((data.annual || []).length || (data.quarterly || []).length)) {
+      finHost.style.minHeight = 'auto';
+      finHost.innerHTML =
+        `<div class="unavail">
+           <div class="unavail__ic">🔒</div>
+           <p>Detailed revenue &amp; profit history isn't available from our free data sources.</p>
+           <p class="muted">See the <b>Annual Reports</b> section below for the official figures.</p>
+         </div>`;
+      return;
+    }
+
+    // Real data → render the controls, legend and chart.
+    $('#finControls', card).innerHTML = `
+      <div class="segmented" data-group="fin">
+        <button data-fin="annual" class="active">Annual</button>
+        <button data-fin="quarterly">Quarterly</button>
+      </div>`;
+    $('#finLegend', card).innerHTML = `
+      <span><i class="legend-dot" style="background:var(--accent-2)"></i> Revenue</span>
+      <span><i class="legend-dot" style="background:var(--buy)"></i> Net Profit</span>`;
 
     const t = ESACharts.themeColors();
     const draw = (mode) => {
@@ -631,9 +659,15 @@
     try { data = await api('/api/shareholding?symbol=' + encodeURIComponent(symbol)); }
     catch (_) { data = null; }
 
-    if (!data || data.available === false || !(data.quarters && data.quarters.length)) {
+    // Never show fabricated shareholding %. Only display real data.
+    if (!data || data.mock || data.available === false || !(data.quarters && data.quarters.length)) {
       card.querySelector('#shpCurrent').innerHTML =
-        '<p class="muted" style="padding:16px 4px">Shareholding data unavailable for this stock.</p>';
+        `<div class="unavail">
+           <div class="unavail__ic">🔒</div>
+           <p>Live shareholding data (promoter / FII / DII / public) isn't available from our free sources.</p>
+           <p class="muted">Check the company's quarterly filing on <a href="https://www.screener.in/company/${esc(symbols_strip(symbol))}/" target="_blank" rel="noopener noreferrer">Screener.in</a> or NSE/BSE.</p>
+         </div>`;
+      shpHost.style.minHeight = 'auto';
       shpHost.innerHTML = '';
       return;
     }
@@ -810,9 +844,9 @@
       </div>
 
       <div class="rheader__stats stagger">
-        <div class="stat"><span class="stat__label">Market Cap</span><span class="stat__value">${fmtCrore(fund && fund.marketCap)}</span></div>
-        <div class="stat"><span class="stat__label">P/E</span><span class="stat__value">${fmtNum(fund && fund.peRatio)}</span></div>
-        <div class="stat"><span class="stat__label">Beta</span><span class="stat__value">${fmtNum(fund && fund.beta)}</span></div>
+        <div class="stat"><span class="stat__label">Prev Close</span><span class="stat__value">₹${fmtNum(quote && quote.previousClose)}</span></div>
+        <div class="stat"><span class="stat__label">Day Range</span><span class="stat__value">${quote && quote.dayLow != null ? fmtNum(quote.dayLow) + '–' + fmtNum(quote.dayHigh) : '—'}</span></div>
+        <div class="stat"><span class="stat__label">Volume</span><span class="stat__value">${fmtVol(quote && quote.volume)}</span></div>
         <div class="stat"><span class="stat__label">52W High</span><span class="stat__value">${fmtNum((quote && quote.yearHigh) ?? (fund && fund.fiftyTwoWeekHigh))}</span></div>
         <div class="stat"><span class="stat__label">52W Low</span><span class="stat__value">${fmtNum((quote && quote.yearLow) ?? (fund && fund.fiftyTwoWeekLow))}</span></div>
       </div>
