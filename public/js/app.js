@@ -245,6 +245,9 @@
       ? annual.map((a) => ({ period: a.period, revenue: a.revenue, profit: a.profit }))
       : [1, 2, 3, 4, 5].map((i) => ({ period: String(thisYear - i) }));
 
+    // Only show revenue/profit figures if they're REAL — never fabricated numbers.
+    const showFigures = !!(fin && !fin.mock);
+
     const gSearch = (y) => 'https://www.google.com/search?q=' +
       encodeURIComponent(`${company} annual report ${y} pdf`);
     const screener = 'https://www.screener.in/company/' + encodeURIComponent(bare) + '/';
@@ -255,16 +258,18 @@
         ${years.map((y) => `
           <div class="arcard">
             <span class="arcard__yr">FY ${esc(y.period)}</span>
-            ${y.revenue != null ? `<span class="arcard__stat">Revenue <b>${fmtCrShort(y.revenue)}</b></span>` : ''}
-            ${y.profit != null ? `<span class="arcard__stat">Net profit <b>${fmtCrShort(y.profit)}</b></span>` : ''}
-            <a class="arcard__link" href="${gSearch(y.period)}" target="_blank" rel="noopener noreferrer">📄 Find report ↗</a>
+            ${showFigures && y.revenue != null ? `<span class="arcard__stat">Revenue <b>${fmtCrShort(y.revenue)}</b></span>` : ''}
+            ${showFigures && y.profit != null ? `<span class="arcard__stat">Net profit <b>${fmtCrShort(y.profit)}</b></span>` : ''}
+            <a class="arcard__link" href="${gSearch(y.period)}" target="_blank" rel="noopener noreferrer">📄 View report ↗</a>
           </div>`).join('')}
       </div>
       <div class="ar-actions">
         <a class="btn btn--primary" href="${screener}" target="_blank" rel="noopener noreferrer">📚 All annual reports (Screener.in) ↗</a>
         <a class="btn" href="${bse}" target="_blank" rel="noopener noreferrer">🏛️ BSE filings ↗</a>
       </div>
-      <p class="ar-note">Reports open on external sites (Screener.in aggregates the official BSE-filed PDFs). Figures shown are ${fin && fin.mock ? 'demo values' : 'from the financials feed'} — always verify against the official report.</p>`;
+      <p class="ar-note">${showFigures
+        ? 'Figures are from the financials feed — always verify against the official report.'
+        : 'Open each year’s official report below (Screener.in aggregates the BSE-filed PDFs) for exact revenue &amp; profit figures.'}</p>`;
   }
 
   // ---------------------------------------------- stock vs Nifty 50 overlay

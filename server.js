@@ -206,7 +206,20 @@ api.get('/fundamentals', async (req, res) => {
         live: () => yahoo.quoteSummary(symbol),
         fake: () => mock.quoteSummary(symbol),
       });
-      return { ...r.data, __mock: r.mock, __fallbackReason: r.fallbackReason };
+      const merged = { ...r.data, __mock: r.mock, __fallbackReason: r.fallbackReason };
+      // Overlay REAL name/sector/industry (search endpoint works via proxy even
+      // when quoteSummary is blocked) so we never show a wrong sector.
+      if (!wantsMock(req)) {
+        try {
+          const info = await yahoo.assetInfo(symbol);
+          if (info) {
+            if (info.name) merged.name = info.name;
+            if (info.sector) { merged.sector = info.sector; merged.__sectorReal = true; }
+            if (info.industry) merged.industry = info.industry;
+          }
+        } catch (_) { /* keep mock sector */ }
+      }
+      return merged;
     });
     const { __mock, __fallbackReason, ...payload } = data;
     res.json({
@@ -275,8 +288,12 @@ api.get('/peers', async (req, res) => {
 
   try {
     const { data, cached } = await cache.wrap(key, TTL.fundamentals, async () => {
-      // Determine the sector (dictionary first, else from fundamentals).
+      // Determine the sector: dictionary first, then the REAL sector via the
+      // search endpoint (proxy), and only mock as a last resort.
       let sector = symbols.sectorOf(symbol);
+      if (!sector && !forceMock) {
+        try { const info = await yahoo.assetInfo(symbol); sector = info && info.sector; } catch (_) { /* ignore */ }
+      }
       if (!sector) {
         try {
           const f = await resolve({ forceMock, live: () => yahoo.quoteSummary(symbol), fake: () => mock.quoteSummary(symbol) });
