@@ -41,8 +41,13 @@ const TTL = {
 // Build a live-quote object from Yahoo chart meta (fallback source).
 async function yahooQuote(symbol) {
   const c = await yahoo.chart(symbol, { range: '5d', interval: '1d', events: '', proxy: true });
-  const last = c.meta.regularMarketPrice ?? (c.candles.at(-1) && c.candles.at(-1).close);
-  const prev = c.meta.previousClose ?? (c.candles.at(-2) && c.candles.at(-2).close);
+  const candles = c.candles || [];
+  const lastC = candles[candles.length - 1] || null;
+  const prevC = candles[candles.length - 2] || null;
+  const last = c.meta.regularMarketPrice ?? (lastC && lastC.close);
+  // Day change must be vs the PREVIOUS trading day's close — i.e. the
+  // second-to-last daily candle — NOT chartPreviousClose (start of the range).
+  const prev = (prevC && prevC.close != null) ? prevC.close : (c.meta.previousClose ?? null);
   const change = last != null && prev != null ? Math.round((last - prev) * 100) / 100 : null;
   return {
     symbol: nse.nseSymbol(symbol),
@@ -51,9 +56,9 @@ async function yahooQuote(symbol) {
     lastPrice: last,
     change,
     changePercent: prev ? Math.round((change / prev) * 10000) / 100 : null,
-    open: c.candles.at(-1) && c.candles.at(-1).open,
-    dayHigh: c.candles.at(-1) && c.candles.at(-1).high,
-    dayLow: c.candles.at(-1) && c.candles.at(-1).low,
+    open: lastC && lastC.open,
+    dayHigh: lastC && lastC.high,
+    dayLow: lastC && lastC.low,
     previousClose: prev,
     vwap: null,
     yearHigh: c.meta.fiftyTwoWeekHigh,
