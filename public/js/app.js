@@ -214,7 +214,7 @@
     }
 
     const name = (fund && fund.name) || (quote && quote.companyName) || null;
-    setDemoMode((quote && quote.mock) || (fund && fund.mock));
+    setDemoMode(true); // banner is a permanent "delayed data / not advice" disclaimer
     if (window.ESAStore) ESAStore.addRecent(symbol, name);
     renderHeader(symbol, quote, fund);
     renderPriceSection(symbol);
@@ -609,11 +609,12 @@
     }
 
     // Real data → render the controls, legend and chart.
-    $('#finControls', card).innerHTML = `
+    const hasQuarterly = (data.quarterly || []).length > 0;
+    $('#finControls', card).innerHTML = hasQuarterly ? `
       <div class="segmented" data-group="fin">
         <button data-fin="annual" class="active">Annual</button>
         <button data-fin="quarterly">Quarterly</button>
-      </div>`;
+      </div>` : '<span class="muted" style="font-size:12px">₹ Crore · annual</span>';
     $('#finLegend', card).innerHTML = `
       <span><i class="legend-dot" style="background:var(--accent-2)"></i> Revenue</span>
       <span><i class="legend-dot" style="background:var(--buy)"></i> Net Profit</span>`;
@@ -844,8 +845,9 @@
       </div>
 
       <div class="rheader__stats stagger">
-        <div class="stat"><span class="stat__label">Prev Close</span><span class="stat__value">₹${fmtNum(quote && quote.previousClose)}</span></div>
-        <div class="stat"><span class="stat__label">Day Range</span><span class="stat__value">${quote && quote.dayLow != null ? fmtNum(quote.dayLow) + '–' + fmtNum(quote.dayHigh) : '—'}</span></div>
+        <div class="stat"><span class="stat__label">Market Cap</span><span class="stat__value">${fmtCrore(fund && fund.marketCap)}</span></div>
+        <div class="stat"><span class="stat__label">P/E</span><span class="stat__value">${fmtNum(fund && fund.peRatio)}</span></div>
+        <div class="stat"><span class="stat__label">ROE</span><span class="stat__value">${fund && fund.returnOnEquity != null ? (fund.returnOnEquity * 100).toFixed(1) + '%' : '—'}</span></div>
         <div class="stat"><span class="stat__label">Volume</span><span class="stat__value">${fmtVol(quote && quote.volume)}</span></div>
         <div class="stat"><span class="stat__label">52W High</span><span class="stat__value">${fmtNum((quote && quote.yearHigh) ?? (fund && fund.fiftyTwoWeekHigh))}</span></div>
         <div class="stat"><span class="stat__label">52W Low</span><span class="stat__value">${fmtNum((quote && quote.yearLow) ?? (fund && fund.fiftyTwoWeekLow))}</span></div>

@@ -18,6 +18,7 @@ const td = require('./lib/twelvedata');
 const nse = require('./lib/nse');
 const mock = require('./lib/mock');
 const news = require('./lib/news');
+const screener = require('./lib/screener');
 const symbols = require('./lib/symbols');
 
 const app = express();
@@ -83,6 +84,22 @@ async function resolve({ forceMock, live, fake }) {
   }
 }
 const wantsMock = (req) => req.query.mock === '1' || req.query.mock === 'true';
+
+// Screener.in page (real revenue/profit + shareholding), fetched once per stock
+// and shared by /financials and /shareholding. In-flight dedup avoids double
+// fetches when both routes fire together on first load.
+const screenerInflight = new Map();
+async function getScreener(symbol) {
+  const k = `screener:${symbol}`;
+  const hit = cache.get(k);
+  if (hit !== undefined) return hit;
+  if (screenerInflight.has(symbol)) return screenerInflight.get(symbol);
+  const p = screener.company(symbol)
+    .then((d) => { cache.set(k, d, TTL.shareholding); screenerInflight.delete(symbol); return d; },
+      (e) => { screenerInflight.delete(symbol); throw e; });
+  screenerInflight.set(symbol, p);
+  return p;
+}
 
 // Normalize a user ticker to a Yahoo symbol. Adds .NS (NSE) unless the caller
 // already provided an exchange suffix or is querying an index (^...).
@@ -201,38 +218,24 @@ api.get('/fundamentals', async (req, res) => {
 
   const key = `fundamentals:${symbol}`;
   try {
-    const { data, cached, stale } = await cache.wrap(key, TTL.fundamentals, async () => {
-      const r = await resolve({
-        forceMock: wantsMock(req),
-        live: () => yahoo.quoteSummary(symbol),
-        fake: () => mock.quoteSummary(symbol),
-      });
-      const merged = { ...r.data, __mock: r.mock, __fallbackReason: r.fallbackReason };
-      // Overlay REAL name/sector/industry (search endpoint works via proxy even
-      // when quoteSummary is blocked) so we never show a wrong sector.
-      if (!wantsMock(req)) {
-        try {
-          const info = await yahoo.assetInfo(symbol);
-          if (info) {
-            if (info.name) merged.name = info.name;
-            if (info.sector) { merged.sector = info.sector; merged.__sectorReal = true; }
-            if (info.industry) merged.industry = info.industry;
-          }
-        } catch (_) { /* keep mock sector */ }
-      }
-      return merged;
+    if (wantsMock(req)) { const d = mock.quoteSummary(symbol); return res.json({ symbol, source: 'mock', mock: true, ...d }); }
+    const { data, cached } = await cache.wrap(key, TTL.fundamentals, async () => {
+      // Build fundamentals from REAL sources only. Fields we can't get are left
+      // null (frontend shows "—") — never fabricated.
+      const out = { symbol, mock: false };
+      try {
+        const info = await yahoo.assetInfo(symbol);
+        if (info) { out.name = info.name; out.sector = info.sector; out.industry = info.industry; }
+      } catch (_) { /* ignore */ }
+      try {
+        const s = await getScreener(symbol);
+        if (s.ratios) Object.assign(out, s.ratios); // marketCap, peRatio, ROE, ROCE, bookValue, dividendYield…
+      } catch (_) { /* ratios unavailable */ }
+      return out;
     });
-    const { __mock, __fallbackReason, ...payload } = data;
-    res.json({
-      symbol, source: __mock ? 'mock' : 'yahoo', mock: !!__mock,
-      cached: !!cached, stale: !!stale, fallbackReason: __fallbackReason,
-      asOf: new Date().toISOString(), ...payload,
-    });
+    res.json({ source: 'real', cached: !!cached, asOf: new Date().toISOString(), ...data });
   } catch (err) {
-    const rl = err && (err.rateLimited || /429/.test(err.message || ''));
-    res.status(rl ? 429 : 502).json({
-      error: rl ? 'rate_limited' : 'fundamentals_fetch_failed', symbol, message: err.message,
-    });
+    res.status(502).json({ error: 'fundamentals_fetch_failed', symbol, message: err.message });
   }
 });
 
@@ -323,26 +326,22 @@ api.get('/peers', async (req, res) => {
   }
 });
 
-// --- Yahoo (with mock fallback): revenue & profit trend ------------------
+// --- Revenue & profit trend: REAL from Screener.in, else "not available" --
 // GET /api/financials?symbol=RELIANCE
 api.get('/financials', async (req, res) => {
   const symbol = toYahooSymbol(req.query.symbol);
   if (!symbol) return res.status(400).json({ error: 'symbol is required' });
-  const key = `financials:${symbol}`;
   try {
-    const { data, cached, stale } = await cache.wrap(key, TTL.shareholding, async () => {
-      const r = await resolve({
-        forceMock: wantsMock(req),
-        live: () => yahoo.financials(symbol),
-        fake: () => mock.financials(symbol),
-      });
-      return { ...r.data, __mock: r.mock };
-    });
-    const { __mock, ...payload } = data;
-    res.json({ symbol, source: __mock ? 'mock' : 'yahoo', mock: !!__mock, cached: !!cached, stale: !!stale, ...payload });
+    if (wantsMock(req)) { const d = mock.financials(symbol); return res.json({ symbol, source: 'mock', mock: true, ...d }); }
+    let fin = null;
+    try { const s = await getScreener(symbol); fin = s.financials; } catch (_) { /* unavailable */ }
+    if (fin && fin.annual && fin.annual.length) {
+      return res.json({ symbol, source: 'screener', mock: false, ...fin });
+    }
+    // No real data → honest "not available" (never fabricated numbers).
+    return res.json({ symbol, source: 'unavailable', mock: false, available: false, annual: [], quarterly: [] });
   } catch (err) {
-    const rl = err && (err.rateLimited || /429/.test(err.message || ''));
-    res.status(rl ? 429 : 502).json({ error: rl ? 'rate_limited' : 'financials_fetch_failed', symbol, message: err.message });
+    res.status(502).json({ error: 'financials_fetch_failed', symbol, message: err.message });
   }
 });
 
@@ -382,29 +381,19 @@ api.get('/quote', async (req, res) => {
   }
 });
 
-// --- NSE (with mock fallback): shareholding pattern ----------------------
-// GET /api/shareholding?symbol=RELIANCE  (best-effort; may be "unavailable")
+// --- Shareholding: REAL from Screener.in, else "not available" -----------
+// GET /api/shareholding?symbol=RELIANCE
 api.get('/shareholding', async (req, res) => {
   const symbol = toYahooSymbol(req.query.symbol);
   if (!symbol) return res.status(400).json({ error: 'symbol is required' });
-  const key = `shareholding:${symbol}`;
-
   try {
-    const { data, cached } = await cache.wrap(key, TTL.shareholding, async () => {
-      if (MOCK_MODE === 'on' || wantsMock(req)) {
-        return { ...mock.shareholding(symbol), mock: true };
-      }
-      try {
-        return { ...(await nse.shareholding(symbol)), mock: false };
-      } catch (nseErr) {
-        if (MOCK_MODE === 'auto') {
-          return { ...mock.shareholding(symbol), mock: true, fallbackReason: nseErr.message };
-        }
-        // Graceful "data unavailable" state rather than a hard error.
-        return { symbol: nse.nseSymbol(symbol), source: 'unavailable', available: false, reason: nseErr.message };
-      }
-    });
-    res.json({ available: true, cached: !!cached, ...data });
+    if (wantsMock(req)) { const d = mock.shareholding(symbol); return res.json({ symbol, source: 'mock', mock: true, available: true, ...d }); }
+    let shp = null;
+    try { const s = await getScreener(symbol); shp = s.shareholding; } catch (_) { /* unavailable */ }
+    if (shp && shp.quarters && shp.quarters.length) {
+      return res.json({ symbol, source: 'screener', mock: false, available: true, ...shp });
+    }
+    return res.json({ symbol, source: 'unavailable', mock: false, available: false });
   } catch (err) {
     res.status(502).json({ error: 'shareholding_fetch_failed', symbol, message: err.message });
   }

@@ -253,23 +253,30 @@
     const t = themeColors();
     const fmt = data.fmt || ((v) => v);
 
-    const max = Math.max(1, ...series.flatMap((s) => s.values.map((v) => v || 0)));
+    // Support negative values (e.g. losses) with a zero baseline.
+    const allVals = series.flatMap((s) => s.values.map((v) => (v == null ? 0 : v)));
+    const maxV = Math.max(0, ...allVals);
+    const minV = Math.min(0, ...allVals);
+    const range = (maxV - minV) || 1;
     const svg = svgEl('svg', { width: '100%', height: H, viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: 'none', class: 'svg-fade' });
     const plotH = H - pad.t - pad.b, plotW = W - pad.l - pad.r;
     const groupW = plotW / cats.length;
     const barW = Math.max(3, (groupW * 0.62) / series.length);
+    const yOf = (v) => pad.t + ((maxV - v) / range) * plotH;   // value → y
+    const zeroY = yOf(0);
 
     // Zero baseline
-    svg.appendChild(svgEl('line', { x1: pad.l, y1: pad.t + plotH, x2: W - pad.r, y2: pad.t + plotH, stroke: t.grid, 'stroke-width': 1 }));
+    svg.appendChild(svgEl('line', { x1: pad.l, y1: zeroY, x2: W - pad.r, y2: zeroY, stroke: t.grid, 'stroke-width': 1 }));
 
     const tip = tooltip(container);
     cats.forEach((cat, ci) => {
       const gx = pad.l + ci * groupW + groupW * 0.19;
       series.forEach((s, si) => {
         const v = s.values[ci] || 0;
-        const h = (Math.abs(v) / max) * plotH;
+        const yv = yOf(v);
+        const y = Math.min(yv, zeroY);
+        const h = Math.max(1, Math.abs(yv - zeroY));
         const x = gx + si * barW;
-        const y = pad.t + plotH - h;
         const rect = svgEl('rect', { x, y, width: barW - 1, height: h, rx: 2, fill: s.color, opacity: 0.92 });
         svg.appendChild(rect);
         rect.addEventListener('mousemove', (e) => showTip(tip, container, e, `${cat}<br><b style="color:${s.color}">${s.name}:</b> ${fmt(v)}`));
