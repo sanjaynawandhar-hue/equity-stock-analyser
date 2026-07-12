@@ -22,6 +22,7 @@ const DEFAULT_STATE = () => ({
   theme: 'dark',
   hinglish: false,
   timerOn: false,
+  voicePref: 'female',   // 'female' | 'male' pronunciation voice
   dailyGoal: 100,
   claudeKey: '',
   vocab: 0,
@@ -284,18 +285,21 @@ const VOICE_FEMALE = /female|veena|neerja|aditi|raveena|heera|samantha|zira|kate
 const VOICE_MALE = /\bmale|rishi|daniel|alex\b|fred|david|mark\b|george|thomas|james|ryan|guy\b|brian|arthur|oliver|liam|william|prabhat|ravi|aaron|albert|gordon|reed|rocko|eddy|grandpa|ralph|junior/i;
 let VOICE = null;
 function pickVoice() {
+  const wantMale = S && S.voicePref === 'male';
   let best = null, bestScore = 0;
   for (const v of speechSynthesis.getVoices()) {
     if (!/^en[-_]/i.test(v.lang)) continue;
     let s = 1;
     const fem = VOICE_FEMALE.test(v.name);
-    if (fem) s += 6;
-    else if (VOICE_MALE.test(v.name)) s -= 6;
+    const male = !fem && VOICE_MALE.test(v.name);
+    if (fem) s += wantMale ? -6 : 6;
+    if (male) s += wantMale ? 6 : -6;
     if (/en[-_]IN/i.test(v.lang)) s += 3;
     else if (/en[-_](GB|US)/i.test(v.lang)) s += 2;
     if (/google|neural|natural|premium|enhanced/i.test(v.name)) s += 1;
-    // known high-quality female voices beat same-score robotic ones (e.g. Kathy)
-    if (/samantha|veena|neerja|zira|serena|joanna|emma\b|amy\b/i.test(v.name)) s += 2;
+    // known high-quality voices beat same-score robotic ones (e.g. Kathy, Fred)
+    if (!wantMale && /samantha|veena|neerja|zira|serena|joanna|emma\b|amy\b/i.test(v.name)) s += 2;
+    if (wantMale && /daniel|rishi|arthur|oliver|ryan|brian|william|guy\b|prabhat/i.test(v.name)) s += 2;
     if (s > bestScore) { bestScore = s; best = v; }
   }
   return best;
@@ -308,7 +312,7 @@ function speak(word) {
     if (VOICE) { u.voice = VOICE; u.lang = VOICE.lang; }
     else u.lang = 'en-IN';
     u.rate = .9;
-    u.pitch = 1.12; // a touch sweeter
+    u.pitch = S && S.voicePref === 'male' ? 1 : 1.12; // female reads a touch sweeter
     speechSynthesis.speak(u);
   } catch (e) {}
 }

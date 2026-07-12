@@ -751,6 +751,12 @@ function viewSettings() {
       <label class="rowline" style="cursor:pointer"><span>⏱️ Test timer (15s/word)</span>
         <input type="checkbox" ${S.timerOn ? 'checked' : ''} onchange="S.timerOn=this.checked;saveState();toast('Saved')"></label>
       <div class="spacer"></div>
+      <div class="rowline"><span>🔊 Pronunciation voice</span>
+        <select class="txt" style="width:150px" onchange="APP.setVoice(this.value)">
+          <option value="female" ${S.voicePref !== 'male' ? 'selected' : ''}>👩 Female</option>
+          <option value="male" ${S.voicePref === 'male' ? 'selected' : ''}>👨 Male</option>
+        </select></div>
+      <div class="spacer"></div>
       <div class="rowline"><span>🎯 Daily goal</span>
         <select class="txt" style="width:110px" onchange="S.dailyGoal=+this.value;S.daily=null;saveState();toast('New goal from now!')">
           ${[25, 50, 100, 200].map(g => `<option value="${g}" ${S.dailyGoal === g ? 'selected' : ''}>${g} words</option>`).join('')}

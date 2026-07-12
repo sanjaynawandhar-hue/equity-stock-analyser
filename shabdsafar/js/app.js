@@ -30,6 +30,13 @@ const APP = {
   flashNext() { if (DECK.i < DECK.cards.length - 1) { DECK.i++; renderFlash(); } },
   flashPrev() { if (DECK.i > 0) { DECK.i--; renderFlash(); } },
 
+  setVoice(pref) {
+    S.voicePref = pref;
+    VOICE = null; // re-pick with the new preference
+    saveState();
+    speak('Welcome to ShabdSafar');
+    toast(pref === 'male' ? 'Male voice selected 👨' : 'Female voice selected 👩');
+  },
   toggleTheme() {
     S.theme = S.theme === 'dark' ? 'light' : 'dark';
     document.documentElement.dataset.theme = S.theme;
