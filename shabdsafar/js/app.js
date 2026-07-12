@@ -78,6 +78,8 @@ const APP = {
 window.answerQ = answerQ;
 window.answerSelf = answerSelf;
 window.answerDeckQ = answerDeckQ;
+window.speakFlash = speakFlash;
+window.speakWod = speakWod;
 
 (async function init() {
   loadState();

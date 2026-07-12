@@ -304,17 +304,32 @@ function pickVoice() {
   }
   return best;
 }
-function speak(word) {
+function speak(word, meaning) {
   try {
     speechSynthesis.cancel();
     if (!VOICE) VOICE = pickVoice();
-    const u = new SpeechSynthesisUtterance(word);
-    if (VOICE) { u.voice = VOICE; u.lang = VOICE.lang; }
-    else u.lang = 'en-IN';
-    u.rate = .9;
-    u.pitch = S && S.voicePref === 'male' ? 1 : 1.12; // female reads a touch sweeter
-    speechSynthesis.speak(u);
+    const say = (text) => {
+      const u = new SpeechSynthesisUtterance(text);
+      if (VOICE) { u.voice = VOICE; u.lang = VOICE.lang; }
+      else u.lang = 'en-IN';
+      u.rate = .9;
+      u.pitch = S && S.voicePref === 'male' ? 1 : 1.12; // female reads a touch sweeter
+      speechSynthesis.speak(u); // queues after any pending utterance
+    };
+    say(word);
+    if (meaning) say('It means. ' + meaning); // spoken after the word, with a pause
   } catch (e) {}
+}
+/* speak the flashcard currently on screen (word + English meaning) */
+function speakFlash() {
+  const c = DECK.cards[DECK.i];
+  if (c) speak(c.w, c.def || '');
+}
+/* speak the dashboard Word of the Day (card cached once fetched) */
+let WOD_CARD = null;
+function speakWod() {
+  if (WOD_CARD) speak(WOD_CARD.w, WOD_CARD.def || '');
+  else speak(S.wodWord || '');
 }
 if ('speechSynthesis' in window) {
   speechSynthesis.addEventListener?.('voiceschanged', () => { VOICE = pickVoice(); });

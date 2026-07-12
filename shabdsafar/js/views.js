@@ -360,7 +360,7 @@ function viewHome() {
     </div>
     <div class="panel wod" id="wodCard">
       <div class="tiny">📅 WORD OF THE DAY</div>
-      <div class="rowline"><h2>${esc(wod)}</h2><button class="speak" onclick="speak('${esc(wod)}')">🔊</button></div>
+      <div class="rowline"><h2>${esc(wod)}</h2><button class="speak" onclick="speakWod()">🔊</button></div>
       <div id="wodBody" class="muted tiny">loading…</div>
     </div>
     <div class="panel">
@@ -372,6 +372,7 @@ function viewHome() {
     ${footer()}
   ${navbar('home')}</div>`;
   getCard(wod).then(c => {
+    WOD_CARD = c; // cache for the 🔊 button (word + meaning)
     const el = document.getElementById('wodBody');
     if (!el) return;
     el.innerHTML = `<div class="meaning-en">${esc(c.def || '')}</div>
@@ -446,7 +447,7 @@ function renderFlash() {
         </div>
         <div class="face back">
           <div class="rowline"><b style="font-size:1.2rem">${esc(c.w)}</b>
-            <button class="speak" onclick="event.stopPropagation();speak('${esc(c.w)}')">🔊</button></div>
+            <button class="speak" onclick="event.stopPropagation();speakFlash()">🔊</button></div>
           <div class="label">English meaning</div>
           <div class="meaning-en">${esc(c.def || '(definition unavailable offline)')}</div>
           <div class="label">हिंदी अर्थ</div>
