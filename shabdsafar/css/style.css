@@ -292,6 +292,16 @@ h1, h2, h3 { line-height: 1.22; letter-spacing: -.02em; font-weight: 800; }
 .feedback.good { color: var(--good); }
 .feedback.bad { color: var(--bad); }
 
+/* know / skip self-report */
+.selfrow { display: flex; gap: 10px; }
+.selfrow .btn { flex: 1; padding: 17px 10px; font-size: 1.02rem; }
+.btn.know {
+  background: linear-gradient(135deg, #3ee59a, #0da56a);
+  color: #04170d; border: none; font-weight: 800;
+  box-shadow: 0 8px 28px -8px rgba(20, 200, 130, .5);
+}
+.selfrow .btn.picked { transform: scale(.96); filter: brightness(1.15); }
+
 /* ============ flashcards ============ */
 .flash { perspective: 1400px; min-height: 400px; }
 .flash-inner { position: relative; width: 100%; min-height: 400px; transform-style: preserve-3d; transition: transform .65s var(--spring); }

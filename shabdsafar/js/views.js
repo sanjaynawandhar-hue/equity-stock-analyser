@@ -55,7 +55,7 @@ function viewSplash() {
     <div class="mt20">
       <button class="btn primary" onclick="APP.go('testIntro')">Begin My Safar 🧭</button>
     </div>
-    <p class="tiny mt14">A 50-word check • ~5 minutes • no signup</p>
+    <p class="tiny mt14">A 50-word check • ~2 minutes • no signup</p>
     ${footer()}
   </div>`;
 }
@@ -67,8 +67,8 @@ function viewTestIntro(kind = 'placement') {
     <div class="panel center">
       <h2>${weekly ? 'Weekly Progress Test 🏆' : 'Your Vocabulary Check 🔍'}</h2>
       <p class="muted mt8">${weekly
-        ? '50 words: 30 fresh + 20 from what you learned recently. Your rating and badge get refreshed.'
-        : "50 words, from everyday to rare. Pick the correct meaning — and be honest: choosing “I don't know” makes your estimate accurate."}</p>
+        ? '50 words: 30 fresh words to tap "I know it" or Skip, plus 20 quick meaning checks on what you learned recently. Your rating and badge get refreshed.'
+        : 'Just 50 quick words, from everyday to rare. Tap <b>I know it</b> only when you truly know the meaning — skip freely. Honesty is what makes your estimate accurate.'}</p>
       <div class="panel mt14" style="box-shadow:none">
         <label class="rowline" style="cursor:pointer">
           <span>⏱️ 15-second timer per word</span>
@@ -101,20 +101,31 @@ function renderQuestion() {
   if (!q) return finishTest();
   clearInterval(TEST.timer);
   const n = TEST.qs.length;
-  $app().innerHTML = `<div class="screen">
-    <div class="topbar"><span class="q-count">WORD ${TEST.i + 1} OF ${n}</span>
-      <span class="tiny">${TEST.kind === 'weekly' ? 'weekly test' : 'placement'}</span></div>
-    <div class="pbar"><i style="width:${(TEST.i / n) * 100}%"></i></div>
-    ${S.timerOn ? `<div class="timerbar"><i id="tbar" style="width:100%"></i></div>` : ''}
-    <div class="panel mt14">
-      <div class="tiny">What does this word mean?</div>
+  const isRet = q.kind === 'retention';
+  // fresh rating words: fast self-report (know / skip);
+  // retention words (weekly): real MCQ check, since they can revoke credit
+  const body = isRet ? `
+      <div class="tiny">Quick check — you learned this recently. What does it mean?</div>
       <div class="q-word">${esc(q.w)}
         <button class="speak" onclick="speak('${esc(q.w)}')" aria-label="pronounce">🔊</button></div>
       <div class="opts">
         ${q.options.map((o, i) => `<button class="opt ${o.dk ? 'dk' : ''}" data-i="${i}" onclick="answerQ(${i})">${esc(o.t)}</button>`).join('')}
       </div>
-      <div class="feedback" id="fb"></div>
-    </div>
+      <div class="feedback" id="fb"></div>` : `
+      <div class="tiny center">Do you know this word?</div>
+      <div class="q-word center" style="font-size:clamp(2.2rem,10vw,2.8rem)">${esc(q.w)}
+        <button class="speak" onclick="speak('${esc(q.w)}')" aria-label="pronounce">🔊</button></div>
+      <div class="selfrow mt20">
+        <button class="btn" id="skipBtn" onclick="answerSelf(false)">Skip →</button>
+        <button class="btn know" id="knowBtn" onclick="answerSelf(true)">✓ I know it</button>
+      </div>
+      <p class="tiny center mt14">Tap "I know it" only if you could explain its meaning.</p>`;
+  $app().innerHTML = `<div class="screen">
+    <div class="topbar"><span class="q-count">WORD ${TEST.i + 1} OF ${n}</span>
+      <span class="tiny">${TEST.kind === 'weekly' ? 'weekly test' : TEST.kind === 'retake' ? 're-rating' : 'placement'}</span></div>
+    <div class="pbar"><i style="width:${(TEST.i / n) * 100}%"></i></div>
+    ${S.timerOn ? `<div class="timerbar"><i id="tbar" style="width:100%"></i></div>` : ''}
+    <div class="panel mt14">${body}</div>
   </div>`;
   if (S.timerOn) {
     TEST.tleft = 15;
@@ -124,11 +135,24 @@ function renderQuestion() {
       if (bar) bar.style.width = (TEST.tleft / 15 * 100) + '%';
       if (TEST.tleft <= 0) {
         clearInterval(TEST.timer);
-        const dkIdx = q.options.findIndex(o => o.dk);
-        answerQ(dkIdx, true);
+        if (isRet) answerQ(q.options.findIndex(o => o.dk), true);
+        else answerSelf(false, true);
       }
     }, 1000);
   }
+}
+
+/* self-report answer for rating words: know = counts as correct, skip = don't know */
+function answerSelf(know, timedOut = false) {
+  clearInterval(TEST.timer);
+  const q = TEST.qs[TEST.i];
+  if (!q) return;
+  TEST.answers.push({ w: q.w, band: q.band, ok: know, dk: !know, kind: q.kind || 'fresh' });
+  const btn = document.getElementById(know ? 'knowBtn' : 'skipBtn');
+  if (btn) { btn.classList.add('picked'); btn.disabled = true; }
+  const other = document.getElementById(know ? 'skipBtn' : 'knowBtn');
+  if (other) other.disabled = true;
+  setTimeout(() => { TEST.i++; renderQuestion(); }, timedOut ? 450 : 220);
 }
 
 function answerQ(idx, timedOut = false) {

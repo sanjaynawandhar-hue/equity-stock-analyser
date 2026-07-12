@@ -34,3 +34,6 @@ __pycache__/
 *.py[cod]
 .venv/
 venv/
+
+# Local Netlify folder
+.netlify
