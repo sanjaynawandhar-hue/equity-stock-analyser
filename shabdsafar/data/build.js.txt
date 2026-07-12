@@ -1,0 +1,221 @@
+#!/usr/bin/env node
+/*
+ * ShabdSafar data pipeline.
+ * Inputs (all openly licensed):
+ *  - en_full.txt      : hermitdave/FrequencyWords (OpenSubtitles 2018, CC BY-SA 4.0)
+ *  - eng-hin/eng-hin.tei : FreeDict English-Hindi dictionary (GPL)
+ *  - websters.json    : Webster's Unabridged (public domain)
+ *  - thesaurus.jsonl  : WordNet-derived synonyms + glosses (WordNet license)
+ *  - ipa_en.json      : open-dict-data/ipa-dict en_US (MIT)
+ * Outputs -> shabdsafar/data/
+ *  - word-index.json  : ~100k frequency-ranked words (rank = position)
+ *  - seed-cards.json  : 2,500+ bilingual word cards
+ *  - test-pool.json   : per-band MCQ pool (word + short definition)
+ */
+const fs = require('fs');
+const path = require('path');
+const SRC = __dirname;
+const OUT = '/Users/suhani/Documents/claucd_sanjay/shabdsafar/data';
+fs.mkdirSync(OUT, { recursive: true });
+
+const BLOCK = new Set(('fuck fucking fucked fucker fuckers shit shits bullshit bitch bitches asshole assholes cunt cunts dick dicks cock cocks pussy pussies nigger niggers nigga niggas whore whores slut sluts bastard bastards damn goddamn motherfucker motherfuckers tits boobs penis vagina anal rape rapist blowjob handjob orgasm masturbate masturbation porn porno hentai').split(/\s+/));
+
+// ---------- frequency list ----------
+const freqRaw = fs.readFileSync(path.join(SRC, 'en_full.txt'), 'utf8').split('\n');
+const freqWords = [];
+const seen = new Set();
+for (const line of freqRaw) {
+  const w = line.split(' ')[0];
+  if (!w || seen.has(w)) continue;
+  if (!/^[a-z]{3,24}$/.test(w) && w !== 'a' && w !== 'i') continue;
+  if (BLOCK.has(w)) continue;
+  seen.add(w);
+  freqWords.push(w);
+  if (freqWords.length >= 220000) break;
+}
+console.log('freq words kept:', freqWords.length);
+
+// ---------- Webster's ----------
+const websters = JSON.parse(fs.readFileSync(path.join(SRC, 'websters.json'), 'utf8'));
+const webKeys = new Set(Object.keys(websters));
+function webDef(w) {
+  let d = websters[w];
+  if (!d) return null;
+  d = d.replace(/\s+/g, ' ').trim();
+  if (/^(Alt\.|See |imp\.|p\. p\.|pl\.|of )/i.test(d)) return null;
+  d = d.replace(/^\d+\.\s*/, '');           // leading sense numbering "1. "
+  d = d.replace(/\[[^\]]*\]/g, ' ');        // usage tags like [Obs.], [R.]
+  d = d.replace(/\s+/g, ' ').trim();
+  // cut at first sentence end that isn't an abbreviation
+  const m = d.match(/^.{20,190}?[.;](?=\s|$)/);
+  d = m ? m[0].replace(/[.;]$/, '') : d.slice(0, 180);
+  d = d.trim();
+  if (d.length < 20) return null;           // drops junk like "Marrow. Chaucer"
+  if (/^[A-Z][a-z]+\.? [A-Z][a-z]+$/.test(d)) return null; // bare cross-refs/attributions
+  return d;
+}
+
+// ---------- WordNet thesaurus ----------
+// Collect every sense; pick the definition from the sense with the most
+// synonyms (a decent proxy for the core sense), earliest wins ties.
+const wn = new Map(); // word -> {pos, desc, descScore, syns:Set}
+const wnLines = fs.readFileSync(path.join(SRC, 'thesaurus.jsonl'), 'utf8').split('\n');
+for (const line of wnLines) {
+  if (!line.trim()) continue;
+  let e; try { e = JSON.parse(line); } catch { continue; }
+  const w = e.word;
+  if (!/^[a-z]{2,24}$/.test(w)) continue;
+  let rec = wn.get(w);
+  if (!rec) { rec = { pos: e.pos, desc: null, descScore: -1, syns: new Set() }; wn.set(w, rec); }
+  const senseSyns = (e.synonyms || []).length;
+  if (e.desc && e.desc.length && senseSyns > rec.descScore) {
+    const d = e.desc.find(x => !/^"/.test(x));
+    if (d && d.length >= 12) { rec.desc = d.replace(/\s+/g, ' ').trim(); rec.descScore = senseSyns; }
+  }
+  for (const s of (e.synonyms || [])) {
+    const clean = s.replace(/_/g, ' ');
+    if (/^[a-z][a-z ]{1,24}$/.test(clean) && clean !== w) rec.syns.add(clean);
+  }
+}
+console.log('wordnet words:', wn.size);
+
+// ---------- IPA ----------
+const ipa = new Map();
+for (const line of fs.readFileSync(path.join(SRC, 'ipa_en.json'), 'utf8').split('\n')) {
+  const [w, p] = line.split('\t');
+  if (w && p && !ipa.has(w)) ipa.set(w, p.split(',')[0].trim());
+}
+console.log('ipa words:', ipa.size);
+
+// ---------- FreeDict TEI ----------
+const tei = fs.readFileSync(path.join(SRC, 'eng-hin/eng-hin.tei'), 'utf8');
+const entries = tei.split('<entry>').slice(1);
+const POS_MAP = { N: 'noun', V: 'verb', Adj: 'adjective', Adv: 'adverb', Det: 'determiner', Prep: 'preposition', Pron: 'pronoun', Conj: 'conjunction', Interj: 'interjection' };
+const hindi = new Map(); // word -> {pos, hi:[], ex}
+for (const block of entries) {
+  const orth = /<orth>([^<]+)<\/orth>/.exec(block);
+  if (!orth) continue;
+  const w = orth[1].toLowerCase().trim();
+  if (!/^[a-z]{2,24}$/.test(w) || hindi.has(w) || BLOCK.has(w)) continue;
+  const pos = /<pos>([^<]+)<\/pos>/.exec(block);
+  const trans = [];
+  const transRe = /<cit type="trans">\s*<quote>([^<]+)<\/quote>/g;
+  let m;
+  while ((m = transRe.exec(block)) && trans.length < 3) {
+    // strip FreeDict domain tags {...} and expand alternates [...] into " / "
+    const parts = m[1].replace(/\{[^}]*\}/g, '').replace(/~/g, ' ').replace(/\[/g, '/').replace(/\]/g, '')
+      .split('/').map(x => x.replace(/\s+/g, ' ').trim()).filter(Boolean);
+    for (const p of parts) {
+      if (/[ऀ-ॿ]/.test(p) && !trans.includes(p) && trans.length < 3) trans.push(p);
+    }
+  }
+  if (!trans.length) continue;
+  const ex = /<cit type="example">\s*<quote>([^<]+)<\/quote>/.exec(block);
+  hindi.set(w, { pos: POS_MAP[pos ? pos[1] : ''] || '', hi: trans, ex: ex ? ex[1].replace(/\s+/g, ' ').trim() : '' });
+}
+console.log('hindi entries:', hindi.size);
+
+// ---------- antonyms (hand-curated) ----------
+const ANT = {
+  happy:'sad', big:'small', fast:'slow', hot:'cold', good:'bad', hard:'soft', easy:'difficult', early:'late', empty:'full', rich:'poor', strong:'weak', brave:'cowardly', bright:'dull', clean:'dirty', deep:'shallow', wide:'narrow', heavy:'light', tall:'short', young:'old', cheap:'expensive', ancient:'modern', abundant:'scarce', accept:'reject', increase:'decrease', expand:'contract', arrive:'depart', succeed:'fail', remember:'forget', attack:'defend', begin:'end', build:'destroy', buy:'sell', love:'hate', win:'lose', open:'close', rise:'fall', appear:'vanish', gather:'scatter', include:'exclude', encourage:'discourage', praise:'criticize', reveal:'conceal', permit:'forbid', unite:'divide', borrow:'lend', tight:'loose', bitter:'sweet', calm:'agitated', careful:'careless', cautious:'reckless', clever:'foolish', common:'rare', complex:'simple', confident:'insecure', cruel:'kind', curious:'indifferent', dangerous:'safe', dark:'bright', dead:'alive', diligent:'lazy', distant:'near', dry:'wet', eager:'reluctant', efficient:'wasteful', enormous:'tiny', equal:'unequal', evil:'good', expensive:'cheap', familiar:'strange', famous:'unknown', fertile:'barren', fierce:'gentle', flexible:'rigid', foolish:'wise', fortunate:'unlucky', fragile:'sturdy', generous:'stingy', genuine:'fake', gloomy:'cheerful', graceful:'clumsy', guilty:'innocent', harmful:'beneficial', honest:'dishonest', humble:'arrogant', hostile:'friendly', idle:'busy', ignorant:'knowledgeable', immense:'tiny', innocent:'guilty', intense:'mild', joyful:'sorrowful', lazy:'diligent', loud:'quiet', loyal:'treacherous', mature:'immature', modest:'boastful', noisy:'silent', obedient:'defiant', optimistic:'pessimistic', ordinary:'extraordinary', patient:'impatient', peaceful:'violent', permanent:'temporary', polite:'rude', positive:'negative', powerful:'powerless', precise:'vague', proud:'humble', rapid:'sluggish', rare:'common', reckless:'cautious', rigid:'flexible', rough:'smooth', rude:'courteous', scarce:'plentiful', selfish:'generous', serious:'playful', sharp:'blunt', shy:'bold', silent:'noisy', sincere:'insincere', smooth:'rough', sober:'drunk', solid:'hollow', stale:'fresh', steep:'gradual', sticky:'slippery', stubborn:'yielding', superior:'inferior', tame:'wild', temporary:'permanent', tender:'tough', thick:'thin', tidy:'messy', timid:'bold', tough:'tender', transparent:'opaque', ugly:'beautiful', urban:'rural', vague:'clear', vast:'tiny', victorious:'defeated', visible:'invisible', vivid:'dull', warm:'cool', wise:'foolish', worthy:'worthless', abandon:'keep', abolish:'establish', absorb:'emit', accelerate:'decelerate', accumulate:'disperse', admire:'despise', admit:'deny', advance:'retreat', agree:'disagree', allow:'forbid', amplify:'diminish', ascend:'descend', assemble:'disband', attract:'repel', blame:'forgive', bless:'curse', broaden:'narrow', capture:'release', cease:'continue', combine:'separate', comfort:'distress', compliment:'insult', conceal:'reveal', condemn:'praise', confirm:'deny', connect:'disconnect', conserve:'waste', construct:'demolish', create:'destroy', cry:'laugh', defend:'attack', delay:'hasten', demand:'supply', deny:'admit', deposit:'withdraw', descend:'ascend', despair:'hope', discourage:'encourage', dismiss:'appoint', earn:'spend', employ:'dismiss', enter:'exit', exhale:'inhale', expose:'cover', extend:'shorten', fail:'succeed', float:'sink', forgive:'blame', freeze:'melt', gain:'lose', give:'take', grow:'shrink', harm:'heal', hate:'love', heal:'wound', hire:'fire', ignore:'notice', import:'export', imprison:'liberate', injure:'heal', invest:'divest', invite:'reject', join:'separate', laugh:'cry', launch:'terminate', lead:'follow', lengthen:'shorten', liberate:'imprison', lift:'lower', lock:'unlock', marry:'divorce', melt:'freeze', mend:'break', multiply:'divide', obey:'defy', offend:'please', oppose:'support', persuade:'dissuade', please:'annoy', polish:'tarnish', postpone:'advance', prohibit:'allow', protect:'endanger', punish:'reward', purchase:'sell', pursue:'flee', raise:'lower', recall:'forget', reduce:'increase', refuse:'accept', reject:'accept', repair:'damage', rescue:'abandon', resist:'surrender', retreat:'advance', reward:'punish', save:'spend', scatter:'gather', shrink:'expand', simplify:'complicate', sink:'float', sow:'reap', spend:'save', strengthen:'weaken', stretch:'compress', surrender:'resist', tighten:'loosen', trust:'doubt', vanish:'appear', weaken:'strengthen', whisper:'shout', widen:'narrow', worship:'despise', wound:'heal',
+  abundance:'scarcity', advantage:'disadvantage', ally:'enemy', ancestor:'descendant', arrival:'departure', ascent:'descent', beauty:'ugliness', beginning:'end', benefit:'harm', birth:'death', bravery:'cowardice', chaos:'order', comedy:'tragedy', comfort:'discomfort', courage:'fear', creation:'destruction', danger:'safety', dawn:'dusk', defeat:'victory', delight:'misery', disease:'health', dusk:'dawn', enemy:'friend', entrance:'exit', expense:'income', failure:'success', fame:'obscurity', famine:'abundance', fear:'courage', freedom:'captivity', friend:'enemy', gain:'loss', giant:'dwarf', guilt:'innocence', harmony:'discord', health:'sickness', heaven:'hell', height:'depth', honesty:'dishonesty', hope:'despair', humility:'pride', ignorance:'knowledge', joy:'sorrow', justice:'injustice', kindness:'cruelty', knowledge:'ignorance', laughter:'tears', liberty:'slavery', life:'death', light:'darkness', loss:'profit', majority:'minority', maximum:'minimum', misery:'happiness', noise:'silence', north:'south', optimist:'pessimist', peace:'war', pleasure:'pain', poverty:'wealth', praise:'criticism', presence:'absence', pride:'humility', profit:'loss', prosperity:'adversity', punishment:'reward', purity:'impurity', question:'answer', reward:'punishment', safety:'danger', scarcity:'abundance', silence:'noise', sorrow:'joy', strength:'weakness', success:'failure', summer:'winter', sunrise:'sunset', truth:'falsehood', unity:'division', victory:'defeat', villain:'hero', virtue:'vice', war:'peace', wealth:'poverty', wisdom:'folly', youth:'age'
+};
+
+// ---------- themed pools (hand-picked, checked against datasets at runtime) ----------
+const THEMES = {
+  movies: 'protagonist antagonist cliffhanger montage sequel prequel genre plot climax dialogue trailer premiere blockbuster critic script screenplay director cinematography suspense thriller narrative flashback cameo ensemble satire parody spoiler franchise adaptation animation documentary auteur denouement melodrama subplot typecast',
+  books: 'novel anthology memoir biography preface epilogue prologue metaphor simile irony allegory narrative prose verse stanza chapter manuscript author literacy fiction fable folklore mythology genre paperback bibliography annotation excerpt quotation plagiarism eloquent literati bibliophile anecdote parable satire',
+  cricket: 'boundary wicket innings umpire spinner bouncer yorker googly maiden century fielder batsman bowler stumps crease pavilion appeal declaration partnership hattrick allrounder swing seam pitch toss chase target defend agile stamina strategy technique momentum consistency dominance rivalry',
+  business: 'liquidity accrual arbitrage equity dividend portfolio inflation revenue margin merger acquisition audit asset liability turnover valuation venture entrepreneur negotiate stakeholder monopoly recession fiscal budget capital collateral credit debit invoice ledger procurement logistics franchise incentive quota tariff',
+  travel: 'itinerary destination expedition voyage passport visa embassy landmark souvenir hostel wanderlust nomad backpacker layover altitude terrain scenic panorama cuisine heritage monument pilgrimage trek safari cruise excursion detour compass latitude longitude vista tranquil exotic remote authentic navigate',
+  food: 'cuisine recipe ingredient marinade garnish appetizer entree dessert savory aroma delicacy gourmet culinary ferment simmer saute braise roast season palate texture zest tangy bland spicy nutritious wholesome organic authentic fusion platter buffet condiment relish succulent tender',
+  technology: 'algorithm bandwidth database encryption interface server browser software hardware network protocol firewall automation innovation digital virtual quantum processor storage backup download upload wireless satellite gadget prototype debug compile deploy startup ecosystem scalable robust intuitive obsolete cybersecurity',
+  music: 'melody rhythm harmony tempo lyric chorus verse symphony orchestra concert acoustic percussion instrumental soprano baritone composer conductor genre ballad anthem serenade crescendo duet ensemble improvise octave pitch chord riff cadence resonance acoustics maestro virtuoso repertoire encore',
+  bollywood: 'debut superstar celebrity glamour audition choreography playback anthem blockbuster masala melodrama romance tragedy comedy dialogue lyricist composer stardom paparazzi gossip charisma iconic legendary versatile veteran newcomer remake biopic item cameo censor certificate premiere multiplex matinee spotlight',
+  selfimprovement: 'discipline resilience perseverance gratitude mindfulness ambition motivation productivity habit consistency focus clarity purpose integrity empathy confidence humility patience determination optimism willpower initiative accountability adaptability procrastination reflection meditation affirmation visualization mentor milestone breakthrough potential mindset momentum growth'
+};
+const themedWords = new Set(Object.values(THEMES).join(' ').split(/\s+/));
+
+// ---------- word index ----------
+// Keep frequency-ranked words that any dictionary validates as a real English word.
+const validated = freqWords.filter(w => webKeys.has(w) || wn.has(w) || hindi.has(w) || ipa.has(w));
+let index = validated.slice(0, 110000);
+if (index.length < 100000) {
+  const inIdx = new Set(index);
+  for (const w of Object.keys(websters)) {
+    if (index.length >= 102000) break;
+    if (/^[a-z]{3,24}$/.test(w) && !inIdx.has(w) && !BLOCK.has(w)) { index.push(w); inIdx.add(w); }
+  }
+}
+console.log('index size:', index.length);
+const rankOf = new Map(index.map((w, i) => [w, i]));
+const BAND_SIZE = Math.ceil(60000 / 7); // 8572
+const bandOf = r => Math.min(6, Math.floor(r / BAND_SIZE));
+fs.writeFileSync(path.join(OUT, 'word-index.json'), JSON.stringify({ v: 1, n: index.length, bandSize: BAND_SIZE, words: index.join('\n') }));
+
+// ---------- seed cards ----------
+// card: [word, pos, ipa, enDef, hiMeaning, example, [syns], ant, band]
+function defFor(w) {
+  const rec = wn.get(w);
+  if (rec && rec.desc && rec.desc.length >= 12 && rec.desc.length <= 200) return rec.desc;
+  return webDef(w);
+}
+function synsFor(w) {
+  const rec = wn.get(w);
+  if (!rec) return [];
+  return [...rec.syns].filter(s => s !== w).slice(0, 3);
+}
+const cards = [];
+const carded = new Set();
+function tryCard(w) {
+  if (carded.has(w)) return;
+  const h = hindi.get(w);
+  if (!h) return;
+  const def = defFor(w);
+  if (!def) return;
+  const r = rankOf.has(w) ? rankOf.get(w) : 65000;
+  cards.push([w, h.pos || (wn.get(w) ? wn.get(w).pos : ''), ipa.get(w) || '', def, h.hi.slice(0, 3).join(' / '), h.ex || '', synsFor(w), ANT[w] || '', bandOf(r)]);
+  carded.add(w);
+}
+// themed words first, then by frequency rank
+for (const w of themedWords) tryCard(w);
+for (const w of index) { if (cards.length >= 2600) break; tryCard(w); }
+console.log('seed cards:', cards.length);
+fs.writeFileSync(path.join(OUT, 'seed-cards.json'), JSON.stringify({ v: 1, cards }));
+
+// ---------- lite cards: every FreeDict word not in seed ----------
+// [word, pos, def, hi, band] — no ipa/examples/syns (filled at runtime).
+const lite = [];
+for (const [w, h] of hindi) {
+  if (carded.has(w)) continue;
+  const def = defFor(w);
+  if (!def) continue;
+  const r = rankOf.has(w) ? rankOf.get(w) : 65000;
+  lite.push([w, h.pos || '', def, h.hi.slice(0, 3).join(' / '), bandOf(Math.min(r, 59999)), h.ex || '']);
+}
+console.log('lite cards:', lite.length);
+fs.writeFileSync(path.join(OUT, 'lite-cards.json'), JSON.stringify({ v: 1, cards: lite }));
+
+// ---------- test pool ----------
+// Per band: words with a short clean definition, spread across the band's rank range.
+const pool = [[], [], [], [], [], [], []];
+for (let r = 0; r < Math.min(index.length, 100000); r++) {
+  const w = index[r];
+  const b = bandOf(Math.min(r, 59999));
+  if (r >= 60000 && r < 100000 && pool[6].length > 700) continue;
+  if (pool[b].length >= 800) continue;
+  const def = defFor(w);
+  if (!def || def.length > 140) continue;
+  pool[b].push([w, def]);
+}
+console.log('test pool per band:', pool.map(p => p.length).join(','));
+fs.writeFileSync(path.join(OUT, 'test-pool.json'), JSON.stringify({ v: 1, bands: pool }));
+
+// ---------- themes ----------
+const themesOut = {};
+for (const [k, v] of Object.entries(THEMES)) themesOut[k] = v.split(/\s+/);
+fs.writeFileSync(path.join(OUT, 'themes.json'), JSON.stringify({ v: 1, themes: themesOut }));
+
+for (const f of ['word-index.json', 'seed-cards.json', 'test-pool.json', 'themes.json']) {
+  console.log(f, (fs.statSync(path.join(OUT, f)).size / 1024).toFixed(0) + ' KB');
+}
