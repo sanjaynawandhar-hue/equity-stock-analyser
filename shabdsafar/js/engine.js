@@ -278,16 +278,42 @@ function hinglish(hi) {
 }
 
 /* ---------------- speech ---------------- */
+/* Prefer a warm female English voice; female outranks locale so e.g.
+   Samantha (en-US) beats Rishi (en-IN male) on macOS. */
+const VOICE_FEMALE = /female|veena|neerja|aditi|raveena|heera|samantha|zira|kate\b|serena|karen|martha|moira|tessa|kathy|shelley|catherine|sonia|libby|natasha|nicole|emma\b|amy\b|joanna|fiona|susan|allison|ava\b|salli|kendra/i;
+const VOICE_MALE = /\bmale|rishi|daniel|alex\b|fred|david|mark\b|george|thomas|james|ryan|guy\b|brian|arthur|oliver|liam|william|prabhat|ravi|aaron|albert|gordon|reed|rocko|eddy|grandpa|ralph|junior/i;
+let VOICE = null;
+function pickVoice() {
+  let best = null, bestScore = 0;
+  for (const v of speechSynthesis.getVoices()) {
+    if (!/^en[-_]/i.test(v.lang)) continue;
+    let s = 1;
+    const fem = VOICE_FEMALE.test(v.name);
+    if (fem) s += 6;
+    else if (VOICE_MALE.test(v.name)) s -= 6;
+    if (/en[-_]IN/i.test(v.lang)) s += 3;
+    else if (/en[-_](GB|US)/i.test(v.lang)) s += 2;
+    if (/google|neural|natural|premium|enhanced/i.test(v.name)) s += 1;
+    // known high-quality female voices beat same-score robotic ones (e.g. Kathy)
+    if (/samantha|veena|neerja|zira|serena|joanna|emma\b|amy\b/i.test(v.name)) s += 2;
+    if (s > bestScore) { bestScore = s; best = v; }
+  }
+  return best;
+}
 function speak(word) {
   try {
     speechSynthesis.cancel();
+    if (!VOICE) VOICE = pickVoice();
     const u = new SpeechSynthesisUtterance(word);
-    u.lang = 'en-IN';
-    const v = speechSynthesis.getVoices().find(v => /en[-_](IN|GB)/i.test(v.lang)) || null;
-    if (v) u.voice = v;
-    u.rate = .85;
+    if (VOICE) { u.voice = VOICE; u.lang = VOICE.lang; }
+    else u.lang = 'en-IN';
+    u.rate = .9;
+    u.pitch = 1.12; // a touch sweeter
     speechSynthesis.speak(u);
   } catch (e) {}
+}
+if ('speechSynthesis' in window) {
+  speechSynthesis.addEventListener?.('voiceschanged', () => { VOICE = pickVoice(); });
 }
 
 /* ---------------- vocabulary estimation ---------------- */
