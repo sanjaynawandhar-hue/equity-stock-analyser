@@ -443,8 +443,34 @@ function backFaceHTML(c) {
     <div class="label">How to use it</div>
     <div class="ex">${c.ex ? boldWord(c.ex, c.w) : boldWord(genericExample(c), c.w)}</div>
     <div class="ex">${boldWord(ex2, c.w)}</div>
-    ${synsHTML(c)}
-    <button class="btn small mt14" onclick="event.stopPropagation();showVideos('${esc(c.w)}')">▶ See “${esc(c.w)}” in real videos</button>`;
+    ${synsHTML(c)}`;
+}
+/* inline real-video player (auto-loads the current word) */
+function videoBlockHTML(word) {
+  return `<div class="panel vidblock" style="padding:12px">
+    <div class="label" style="margin-top:0">▶ “${esc(word)}” in real videos — movies, news & talks</div>
+    <div id="ygflow" class="ygflow"><span class="tiny">loading real clips…</span></div>
+  </div>`;
+}
+function mountVideo(word) {
+  const fallback = () => {
+    const box = document.getElementById('ygflow');
+    if (box) box.innerHTML = `<a class="btn small" href="https://youglish.com/pronounce/${encodeURIComponent(word)}/english" target="_blank" rel="noopener">Open real videos on YouGlish ↗</a>`;
+  };
+  loadYouglishScript().then(() => {
+    const box = document.getElementById('ygflow');
+    if (!box) return;
+    box.innerHTML = '<div id="ygwidget"></div>';
+    try {
+      const widget = new window.YG.Widget('ygwidget', {
+        width: Math.min(440, box.clientWidth || 360),
+        components: 3, // video + caption + phonetic, no mic coach
+        autostart: 1,  // start playing when the word loads
+        events: { onFetchDone: (e) => { if (e.totalResult === 0 && document.getElementById('ygflow')) box.innerHTML = '<span class="tiny">No clips found for this word.</span>'; } },
+      });
+      widget.fetch(word, 'english');
+    } catch (e) { fallback(); }
+  }).catch(fallback);
 }
 function frontFaceHTML(c) {
   return `<div class="word-big">${esc(c.w)}</div>
@@ -484,18 +510,21 @@ async function renderFlowCard() {
       <span class="tiny">${done}/${total} ✅</span></div>
     <div class="pbar"><i style="width:${((FLOW.i + 1) / total) * 100}%"></i></div>
     <div class="spacer"></div>
-    <div class="flash" id="flash" onclick="document.getElementById('flash').classList.toggle('flipped')">
+    <div class="flash compact" id="flash" onclick="document.getElementById('flash').classList.toggle('flipped')">
       <div class="flash-inner">
         <div class="face front center" style="justify-content:center">${frontFaceHTML(c)}</div>
         <div class="face back">${backFaceHTML(c)}</div>
       </div>
     </div>
     <div class="spacer"></div>
+    ${videoBlockHTML(c.w)}
+    <div class="spacer"></div>
     <div class="btnrow">
       <button class="btn" onclick="APP.flowSkip()">Skip ⏭</button>
       <button class="btn primary" onclick="APP.flowQuiz()">I've got it — quiz me →</button>
     </div>
   </div>`;
+  mountVideo(c.w); // auto-start the real-video player for this word
 }
 /* one MCQ for the current flow word */
 function flowQuiz() {
@@ -648,12 +677,14 @@ function renderFlash() {
       <span class="tiny">${DECK.isTricky ? '🧩 revision' : 'Deck ' + (DECK.idx + 1)}</span></div>
     <div class="pbar"><i style="width:${((DECK.i + 1) / n) * 100}%"></i></div>
     <div class="spacer"></div>
-    <div class="flash" id="flash" onclick="document.getElementById('flash').classList.toggle('flipped')">
+    <div class="flash compact" id="flash" onclick="document.getElementById('flash').classList.toggle('flipped')">
       <div class="flash-inner">
         <div class="face front center" style="justify-content:center">${frontFaceHTML(c)}</div>
         <div class="face back">${backFaceHTML(c)}</div>
       </div>
     </div>
+    <div class="spacer"></div>
+    ${videoBlockHTML(c.w)}
     <div class="spacer"></div>
     <div class="btnrow">
       <button class="btn" onclick="APP.flashPrev()" ${DECK.i === 0 ? 'disabled' : ''}>← Back</button>
@@ -662,6 +693,7 @@ function renderFlash() {
         : `<button class="btn primary" onclick="APP.startDeckQuiz()">Take the Quiz 📝</button>`}
     </div>
   </div>`;
+  mountVideo(c.w);
 }
 function boldWord(sentence, w) {
   const re = new RegExp('(' + w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\w*)', 'i');

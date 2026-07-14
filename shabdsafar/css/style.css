@@ -305,6 +305,7 @@ h1, h2, h3 { line-height: 1.22; letter-spacing: -.02em; font-weight: 800; }
 /* ============ flashcards ============ */
 .flash { perspective: 1400px; min-height: 400px; }
 .flash-inner { position: relative; width: 100%; min-height: 400px; transform-style: preserve-3d; transition: transform .65s var(--spring); }
+.flash.compact, .flash.compact .flash-inner, .flash.compact .face { min-height: 300px; }
 .flash.flipped .flash-inner { transform: rotateY(180deg); }
 .face {
   position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden;
@@ -502,6 +503,12 @@ input[type="checkbox"]:checked::after { transform: translateX(19px); }
   -webkit-background-clip: text; background-clip: text; color: transparent;
 }
 .splash .tagline { color: var(--dim); font-weight: 700; letter-spacing: .22em; text-transform: uppercase; font-size: .76rem; }
+
+/* inline real-video player on flashcards */
+.vidblock { animation: optIn .4s var(--spring) both; }
+.ygflow { min-height: 210px; border-radius: 12px; overflow: hidden; display: grid; place-items: center; background: var(--ring-track); }
+.ygflow iframe { width: 100%; border: 0; border-radius: 12px; display: block; }
+.ygflow > div { width: 100%; }
 
 /* streak flame */
 .flame { display: inline-flex; align-items: center; gap: 5px; font-weight: 800; color: var(--accent); }
