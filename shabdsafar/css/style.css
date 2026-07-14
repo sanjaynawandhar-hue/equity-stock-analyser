@@ -504,11 +504,22 @@ input[type="checkbox"]:checked::after { transform: translateX(19px); }
 }
 .splash .tagline { color: var(--dim); font-weight: 700; letter-spacing: .22em; text-transform: uppercase; font-size: .76rem; }
 
-/* inline real-video player on flashcards */
+/* inline real-video player on flashcards — cropped to JUST the video band.
+   YouGlish renders a tall iframe: search box + accent tabs + title (~156px),
+   then the video, then controls/caption/coach. We fix the width (so that
+   top-chrome height is constant), shift the iframe up to drop everything
+   above the video, and clip the height to hide everything below it. A thin
+   top mask hides any residual title from longer words. */
 .vidblock { animation: optIn .4s var(--spring) both; }
-.ygflow { min-height: 210px; border-radius: 12px; overflow: hidden; display: grid; place-items: center; background: var(--ring-track); }
-.ygflow iframe { width: 100%; border: 0; border-radius: 12px; display: block; }
-.ygflow > div { width: 100%; }
+.ygframe {
+  position: relative; width: 320px; max-width: 100%; margin: 0 auto;
+  height: 182px; overflow: hidden;
+  border-radius: 14px; background: #000; box-shadow: var(--shadow);
+}
+.ygslot { position: relative; }
+.ygframe iframe { width: 320px !important; border: 0 !important; margin-top: -156px !important; display: block; }
+.ygmask { position: absolute; top: 0; left: 0; right: 0; height: 22px; background: #000; z-index: 2; pointer-events: none; }
+.ygload { position: absolute; inset: 0; display: grid; place-items: center; z-index: 3; pointer-events: none; }
 
 /* streak flame */
 .flame { display: inline-flex; align-items: center; gap: 5px; font-weight: 800; color: var(--accent); }

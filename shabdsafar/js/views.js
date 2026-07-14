@@ -445,30 +445,44 @@ function backFaceHTML(c) {
     <div class="ex">${boldWord(ex2, c.w)}</div>
     ${synsHTML(c)}`;
 }
-/* inline real-video player (auto-loads the current word) */
+/* inline real-video player — cropped to just the video, auto-plays a
+   short (~15s) clip of the word being used. */
+let YG_WIDGET = null, YG_TIMER = null;
+const YG_CLIP_MS = 15000;
 function videoBlockHTML(word) {
-  return `<div class="panel vidblock" style="padding:12px">
-    <div class="label" style="margin-top:0">▶ “${esc(word)}” in real videos — movies, news & talks</div>
-    <div id="ygflow" class="ygflow"><span class="tiny">loading real clips…</span></div>
+  return `<div class="vidblock">
+    <div class="label" style="margin:0 0 8px">▶ “${esc(word)}” in a real video — 15-sec clip</div>
+    <div class="ygframe">
+      <div id="ygflow" class="ygslot"></div>
+      <div class="ygmask"></div>
+      <div class="ygload" id="ygload"><span class="tiny" style="color:#fff">loading clip…</span></div>
+    </div>
   </div>`;
 }
 function mountVideo(word) {
   const fallback = () => {
-    const box = document.getElementById('ygflow');
-    if (box) box.innerHTML = `<a class="btn small" href="https://youglish.com/pronounce/${encodeURIComponent(word)}/english" target="_blank" rel="noopener">Open real videos on YouGlish ↗</a>`;
+    const f = document.getElementById('ygframeWrap') || document.querySelector('.ygframe');
+    if (f) f.innerHTML = `<a class="btn small" style="margin:80px auto" href="https://youglish.com/pronounce/${encodeURIComponent(word)}/english" target="_blank" rel="noopener">Open real video ↗</a>`;
   };
+  clearTimeout(YG_TIMER);
   loadYouglishScript().then(() => {
-    const box = document.getElementById('ygflow');
-    if (!box) return;
-    box.innerHTML = '<div id="ygwidget"></div>';
+    const slot = document.getElementById('ygflow');
+    if (!slot) return;
     try {
-      const widget = new window.YG.Widget('ygwidget', {
-        width: Math.min(440, box.clientWidth || 360),
-        components: 3, // video + caption + phonetic, no mic coach
-        autostart: 1,  // start playing when the word loads
-        events: { onFetchDone: (e) => { if (e.totalResult === 0 && document.getElementById('ygflow')) box.innerHTML = '<span class="tiny">No clips found for this word.</span>'; } },
+      YG_WIDGET = new window.YG.Widget('ygflow', {
+        width: 320,           // fixed → the crop offsets stay constant
+        components: 0,        // no phonetic/caption/coach chrome
+        autostart: 1,         // play as soon as the word loads
+        events: {
+          onFetchDone: (e) => { if (e.totalResult === 0) fallback(); },
+          onVideoChange: () => {
+            const l = document.getElementById('ygload'); if (l) l.style.display = 'none';
+            clearTimeout(YG_TIMER);                       // play ~15s then pause
+            YG_TIMER = setTimeout(() => { try { YG_WIDGET.pause(); } catch (e) {} }, YG_CLIP_MS);
+          },
+        },
       });
-      widget.fetch(word, 'english');
+      YG_WIDGET.fetch(word, 'english');
     } catch (e) { fallback(); }
   }).catch(fallback);
 }
@@ -510,14 +524,14 @@ async function renderFlowCard() {
       <span class="tiny">${done}/${total} ✅</span></div>
     <div class="pbar"><i style="width:${((FLOW.i + 1) / total) * 100}%"></i></div>
     <div class="spacer"></div>
+    ${videoBlockHTML(c.w)}
+    <div class="spacer"></div>
     <div class="flash compact" id="flash" onclick="document.getElementById('flash').classList.toggle('flipped')">
       <div class="flash-inner">
         <div class="face front center" style="justify-content:center">${frontFaceHTML(c)}</div>
         <div class="face back">${backFaceHTML(c)}</div>
       </div>
     </div>
-    <div class="spacer"></div>
-    ${videoBlockHTML(c.w)}
     <div class="spacer"></div>
     <div class="btnrow">
       <button class="btn" onclick="APP.flowSkip()">Skip ⏭</button>
@@ -677,14 +691,14 @@ function renderFlash() {
       <span class="tiny">${DECK.isTricky ? '🧩 revision' : 'Deck ' + (DECK.idx + 1)}</span></div>
     <div class="pbar"><i style="width:${((DECK.i + 1) / n) * 100}%"></i></div>
     <div class="spacer"></div>
+    ${videoBlockHTML(c.w)}
+    <div class="spacer"></div>
     <div class="flash compact" id="flash" onclick="document.getElementById('flash').classList.toggle('flipped')">
       <div class="flash-inner">
         <div class="face front center" style="justify-content:center">${frontFaceHTML(c)}</div>
         <div class="face back">${backFaceHTML(c)}</div>
       </div>
     </div>
-    <div class="spacer"></div>
-    ${videoBlockHTML(c.w)}
     <div class="spacer"></div>
     <div class="btnrow">
       <button class="btn" onclick="APP.flashPrev()" ${DECK.i === 0 ? 'disabled' : ''}>← Back</button>

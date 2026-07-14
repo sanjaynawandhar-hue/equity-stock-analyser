@@ -383,7 +383,7 @@ function speakWod() {
 }
 /* pick a fresh Word of the Day on demand (refresh button) */
 function rerollWod() {
-  const pool = [...SEED.keys()];
+  const pool = [...SEED.keys()].filter(w => !isBlocked(w));
   let w = S.wodWord;
   for (let i = 0; i < 20 && (w === S.wodWord || !w); i++) w = pool[Math.floor(Math.random() * pool.length)];
   S.wodWord = w;
@@ -423,7 +423,7 @@ function buildRatingQuestions(n) {
   const qs = [];
   for (let b = 0; b < BAND_COUNT; b++) {
     const want = perBand + (b === 3 && extra > 0 ? extra : 0);
-    const fresh = shuffled(TESTPOOL[b].filter(([w]) => !used.has(w)));
+    const fresh = shuffled(TESTPOOL[b].filter(([w]) => !used.has(w) && !isBlocked(w)));
     for (let i = 0; i < want && i < fresh.length; i++) {
       const [w, def] = fresh[i];
       qs.push(makeQuestion(w, def, b));
@@ -491,7 +491,13 @@ function ensureDaily() {
   S.daily = { date: today, words: shuffled(words), done: {}, decksDone: Array(Math.ceil(words.length / 10)).fill(false) };
   saveState();
 }
-function SBlockedDaily(w) { return false; }
+/* Words unsuitable for a general learner feed (sexual/vulgar/disturbing).
+   The dataset already strips hard profanity; this catches milder-but-
+   inappropriate words like "spank" from the daily feed, Word of the Day
+   and quizzes. */
+const SENSITIVE = new Set(('spank spanking horny sexy sexier sexiest sexual sexuality seduce seduced seductive erotic erotica nude nudity naked lust lustful arousal aroused orgasm orgasmic climax condom brothel prostitute prostitution pimp incest molest molested molestation pedophile pedophilia fetish kinky masturbate masturbation ejaculate ejaculation genital genitalia testicle testicles scrotum nipple nipples areola libido fornicate copulate copulation intercourse foreplay stripper lingerie dildo vibrator bestiality rapist rape raping molester sodomy sodomize').split(/\s+/));
+function isBlocked(w) { return SENSITIVE.has(w); }
+function SBlockedDaily(w) { return isBlocked(w); }
 function dailyDoneCount() { return S.daily ? Object.keys(S.daily.done).length : 0; }
 
 /* ---------------- streaks ---------------- */
@@ -573,8 +579,8 @@ async function buildWeeklyQuestions() {
 /* ---------------- word of the day ---------------- */
 function wordOfDay() {
   const today = todayStr();
-  if (S.wodDate === today && S.wodWord) return S.wodWord;
-  const pool = [...SEED.keys()];
+  if (S.wodDate === today && S.wodWord && !isBlocked(S.wodWord)) return S.wodWord;
+  const pool = [...SEED.keys()].filter(w => !isBlocked(w));
   const dayNum = Math.floor(Date.now() / 864e5);
   S.wodDate = today;
   S.wodWord = pool[dayNum % pool.length];
