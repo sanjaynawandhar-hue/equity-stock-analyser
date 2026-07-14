@@ -385,8 +385,7 @@ function loadWodBody() {
     const el = document.getElementById('wodBody');
     if (!el) return;
     el.innerHTML = `<div class="meaning-en">${esc(c.def || '')}</div>
-      <div class="meaning-hi hi">${esc(c.hi || '')}${S.hinglish && c.hi ? ` <span class="tiny">(${esc(hinglish(c.hi))})</span>` : ''}</div>
-      <button class="btn small mt8" onclick="showVideos('${esc(c.w)}')">▶ See it in real videos</button>`;
+      <div class="meaning-hi hi">${esc(c.hi || '')}${S.hinglish && c.hi ? ` <span class="tiny">(${esc(hinglish(c.hi))})</span>` : ''}</div>`;
   });
 }
 function refreshWodCard() {
