@@ -25,6 +25,14 @@ const APP = {
     }
   },
   startTest(kind) { startTest(kind); },
+  skipPlacement() {
+    // start with no rating: Beginner, empty vocabulary, no test history
+    S.vocab = 0;
+    S.highestLevel = 1;
+    S.bandStats = null;
+    saveState();
+    APP.go(S.onboarded ? 'home' : 'interests');
+  },
   openDeck(i) { openDeck(i, false); },
   startDeckQuiz() { startDeckQuiz(); },
   flashNext() { if (DECK.i < DECK.cards.length - 1) { DECK.i++; renderFlash(); } },

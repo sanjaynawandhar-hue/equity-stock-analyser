@@ -76,7 +76,9 @@ function viewTestIntro(kind = 'placement') {
         </label>
       </div>
       <div class="mt14"><button class="btn primary" onclick="APP.startTest('${kind}')">Start the 50-Word Test</button></div>
-      ${weekly ? '' : `<p class="tiny mt8">No going back on questions. Ready?</p>`}
+      ${weekly ? '' : `
+      <div class="mt8"><button class="btn ghost" onclick="APP.skipPlacement()">Skip the test — start at Beginner</button></div>
+      <p class="tiny mt8">You can take the test anytime from Settings to get your real rating.</p>`}
     </div>
   ${footer()}</div>`;
 }
