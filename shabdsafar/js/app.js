@@ -29,6 +29,10 @@ const APP = {
   startDeckQuiz() { startDeckQuiz(); },
   flashNext() { if (DECK.i < DECK.cards.length - 1) { DECK.i++; renderFlash(); } },
   flashPrev() { if (DECK.i > 0) { DECK.i--; renderFlash(); } },
+  startFlow() { startFlow(); },
+  flowQuiz() { flowQuiz(); },
+  flowSkip() { FLOW.i++; renderFlowCard(); },
+  refreshWod() { refreshWodCard(); toast('A new word for you 🔄'); },
 
   setVoice(pref) {
     S.voicePref = pref;
@@ -78,8 +82,10 @@ const APP = {
 window.answerQ = answerQ;
 window.answerSelf = answerSelf;
 window.answerDeckQ = answerDeckQ;
+window.answerFlowQ = answerFlowQ;
 window.speakFlash = speakFlash;
 window.speakWod = speakWod;
+window.showVideos = showVideos;
 
 (async function init() {
   loadState();

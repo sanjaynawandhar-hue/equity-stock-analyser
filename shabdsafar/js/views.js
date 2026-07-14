@@ -353,16 +353,12 @@ function viewHome() {
       ${ringSVG(goal ? done / goal : 0, 110, `<b>${done}</b><div class="tiny">of ${goal}</div>`)}
       <div class="grow" style="padding-left:14px">
         <h3>Today's ${goal} Words</h3>
-        <p class="tiny mt8">${done >= goal && goal > 0 ? 'All done! Bonus flame earned 🔥' : `${goal - done} to go — split into easy decks of 10.`}</p>
+        <p class="tiny mt8">${done >= goal && goal > 0 ? 'All done! Bonus flame earned 🔥' : `${goal - done} to go — learn them one word at a time.`}</p>
         <button class="btn primary small mt8" onclick="APP.go('learn')">${done === 0 ? 'Start' : done >= goal ? 'Review' : 'Continue'} →</button>
         ${due ? `<button class="btn small mt8" style="margin-left:8px" onclick="APP.go('tricky')">🧩 ${due} tricky due</button>` : ''}
       </div>
     </div>
-    <div class="panel wod" id="wodCard">
-      <div class="tiny">📅 WORD OF THE DAY</div>
-      <div class="rowline"><h2>${esc(wod)}</h2><button class="speak" onclick="speakWod()">🔊</button></div>
-      <div id="wodBody" class="muted tiny">loading…</div>
-    </div>
+    <div class="panel wod" id="wodCard">${wodCardHTML()}</div>
     <div class="panel">
       <div class="rowline"><h3>🛤️ Safar to Genius</h3><button class="btn ghost small" onclick="APP.go('safar')">Full trail →</button></div>
       <div style="display:flex;gap:4px;justify-content:space-between;margin-top:10px">
@@ -371,44 +367,260 @@ function viewHome() {
     </div>
     ${footer()}
   ${navbar('home')}</div>`;
+  loadWodBody();
+}
+
+/* ---- Word of the Day card (refreshable) ---- */
+function wodCardHTML() {
+  const wod = wordOfDay();
+  return `<div class="rowline"><div class="tiny">📅 WORD OF THE DAY</div>
+      <button class="speak" style="width:34px;height:34px;font-size:1rem" onclick="APP.refreshWod()" title="show a new word">🔄</button></div>
+    <div class="rowline"><h2>${esc(wod)}</h2><button class="speak" onclick="speakWod()" title="pronounce">🔊</button></div>
+    <div id="wodBody" class="muted tiny">loading…</div>`;
+}
+function loadWodBody() {
+  const wod = S.wodWord || wordOfDay();
   getCard(wod).then(c => {
     WOD_CARD = c; // cache for the 🔊 button (word + meaning)
     const el = document.getElementById('wodBody');
     if (!el) return;
     el.innerHTML = `<div class="meaning-en">${esc(c.def || '')}</div>
-      <div class="meaning-hi hi">${esc(c.hi || '')}${S.hinglish && c.hi ? ` <span class="tiny">(${esc(hinglish(c.hi))})</span>` : ''}</div>`;
+      <div class="meaning-hi hi">${esc(c.hi || '')}${S.hinglish && c.hi ? ` <span class="tiny">(${esc(hinglish(c.hi))})</span>` : ''}</div>
+      <button class="btn small mt8" onclick="showVideos('${esc(c.w)}')">▶ See it in real videos</button>`;
   });
 }
+function refreshWodCard() {
+  rerollWod();
+  WOD_CARD = null;
+  const card = document.getElementById('wodCard');
+  if (card) { card.innerHTML = wodCardHTML(); loadWodBody(); }
+}
 
-/* =============== LEARN (deck grid) =============== */
+/* =============== LEARN (continuous 1→100, no decks) =============== */
 function viewLearn() {
   ensureDaily();
   const words = S.daily.words;
-  const decks = [];
-  for (let i = 0; i < words.length; i += 10) decks.push(words.slice(i, i + 10));
+  const total = words.length;
   const done = dailyDoneCount();
   const due = dueTricky();
+  const nextPos = (() => {
+    const i = words.findIndex(w => !S.daily.done[w]);
+    return i < 0 ? total : i + 1;
+  })();
+  const allDone = done >= total && total > 0;
   $app().innerHTML = `<div class="screen">${topbar()}
-    <div class="rowline"><h2>Today's Decks</h2><span class="flame">🔥 ${S.streak.current}</span></div>
-    <p class="tiny">${done}/${words.length} words mastered today · finish all for a bonus flame</p>
-    <div class="pbar mt8"><i style="width:${words.length ? done / words.length * 100 : 0}%"></i></div>
-    <div class="spacer"></div>
-    <div class="deckgrid">
-      ${decks.map((d, i) => {
-        const deckDone = S.daily.decksDone[i];
-        const mastered = d.filter(w => S.daily.done[w]).length;
-        return `<div class="deck ${deckDone ? 'done' : ''}" onclick="APP.openDeck(${i})">
-          <div class="dn">Deck ${i + 1}</div>
-          <div class="dw">${d.slice(0, 3).map(esc).join(', ')}…</div>
-          <div class="pbar mt8" style="height:6px"><i style="width:${mastered * 10}%"></i></div>
-          <span class="st">${deckDone ? '✅' : mastered > 0 ? '▶️' : ''}</span>
-        </div>`;
-      }).join('')}
-      ${due.length ? `<div class="deck" style="border-color:var(--accent)" onclick="APP.go('tricky')">
-        <div class="dn">🧩 Tricky Words</div><div class="dw">${due.length} due for revision</div><span class="st">⏰</span></div>` : ''}
+    <div class="rowline"><h2>Today's ${total} Words</h2><span class="flame">🔥 ${S.streak.current}</span></div>
+    <p class="tiny">Learn them one by one — flip, then answer. Each correct answer is +1 word on your safar.</p>
+    <div class="panel mt14 center">
+      ${ringSVG(total ? done / total : 0, 150, `<b style="font-size:1.5rem">${done}</b><div class="tiny">of ${total}</div>`)}
+      <p class="muted mt14">${allDone
+        ? 'All ' + total + ' done today — bonus flame earned! 🔥 You can revise them again.'
+        : 'You’re on word <b>' + nextPos + '</b> of ' + total + '.'}</p>
+      <button class="btn primary mt8" onclick="APP.startFlow()">${done === 0 ? 'Start learning →' : allDone ? 'Revise today’s words ↺' : 'Continue — word ' + nextPos + ' →'}</button>
     </div>
+    ${due.length ? `<div class="panel rowline" style="cursor:pointer;border-color:var(--accent)" onclick="APP.go('tricky')">
+      <div><h3>🧩 Tricky Words</h3><p class="tiny">${due.length} due for spaced-repetition revision</p></div>
+      <span style="font-size:1.4rem">⏰</span></div>` : ''}
     ${footer()}
   ${navbar('learn')}</div>`;
+}
+
+/* ---- shared flashcard back face (meaning, examples, synonyms, video) ---- */
+function synsHTML(c) {
+  if (c.syns && c.syns.length) return `<div class="label">Synonyms ${c.ant ? '· Antonym' : ''}</div>
+    <div class="syn-chips">${c.syns.map(s => `<span>${esc(s)}</span>`).join('')}${c.ant ? `<span class="ant">✗ ${esc(c.ant)}</span>` : ''}</div>`;
+  if (c.ant) return `<div class="label">Antonym</div><div class="syn-chips"><span class="ant">✗ ${esc(c.ant)}</span></div>`;
+  return '';
+}
+function backFaceHTML(c) {
+  const ex2 = personalExample(c);
+  return `<div class="rowline"><b style="font-size:1.2rem">${esc(c.w)}</b>
+      <button class="speak" onclick="event.stopPropagation();speakFlash()" title="hear the word & meaning">🔊</button></div>
+    <div class="label">English meaning</div>
+    <div class="meaning-en">${esc(c.def || '(definition unavailable offline)')}</div>
+    <div class="label">हिंदी अर्थ</div>
+    <div class="meaning-hi hi">${esc(c.hi || 'उपलब्ध नहीं — connect online for Hindi')}
+      ${S.hinglish && c.hi ? `<div class="tiny">${esc(hinglish(c.hi))}</div>` : ''}</div>
+    <div class="label">How to use it</div>
+    <div class="ex">${c.ex ? boldWord(c.ex, c.w) : boldWord(genericExample(c), c.w)}</div>
+    <div class="ex">${boldWord(ex2, c.w)}</div>
+    ${synsHTML(c)}
+    <button class="btn small mt14" onclick="event.stopPropagation();showVideos('${esc(c.w)}')">▶ See “${esc(c.w)}” in real videos</button>`;
+}
+function frontFaceHTML(c) {
+  return `<div class="word-big">${esc(c.w)}</div>
+    ${c.ipa ? `<div class="ipa">${esc(c.ipa)}</div>` : ''}
+    <button class="speak mt14" onclick="event.stopPropagation();speakFlash()" title="hear pronunciation">🔊</button>
+    <div class="mt14">${c.pos ? `<span class="pos-chip">${esc(c.pos)}</span>` : ''}</div>
+    <p class="tiny mt20">tap to flip 🔄</p>`;
+}
+
+/* =============== CONTINUOUS DAILY FLOW (flashcard → quiz → next) =============== */
+const FLOW = { list: [], i: 0, card: null };
+function startFlow() {
+  ensureDaily();
+  const words = S.daily.words;
+  FLOW.list = words;
+  // start at first not-yet-mastered word; if all done, review from the top
+  let i = words.findIndex(w => !S.daily.done[w]);
+  FLOW.i = i < 0 ? 0 : i;
+  FLOW.reviewing = i < 0;
+  renderFlowCard();
+}
+async function renderFlowCard() {
+  const w = FLOW.list[FLOW.i];
+  if (w === undefined) return finishFlow();
+  // skip words already mastered earlier this session (unless reviewing)
+  if (!FLOW.reviewing && S.daily.done[w]) { FLOW.i++; return renderFlowCard(); }
+  $app().innerHTML = `<div class="screen center"><div class="spacer"></div><h3>Loading word ${FLOW.i + 1}… 📖</h3></div>`;
+  const c = await getCard(w);
+  FLOW.card = c;
+  CUR_FLASH = c;
+  if (FLOW.list[FLOW.i + 1]) getCard(FLOW.list[FLOW.i + 1]); // prefetch next
+  const total = FLOW.list.length;
+  const done = dailyDoneCount();
+  $app().innerHTML = `<div class="screen">
+    <div class="topbar"><button class="iconbtn" onclick="APP.go('learn')">✕</button>
+      <span class="q-count">WORD ${FLOW.i + 1} OF ${total}</span>
+      <span class="tiny">${done}/${total} ✅</span></div>
+    <div class="pbar"><i style="width:${((FLOW.i + 1) / total) * 100}%"></i></div>
+    <div class="spacer"></div>
+    <div class="flash" id="flash" onclick="document.getElementById('flash').classList.toggle('flipped')">
+      <div class="flash-inner">
+        <div class="face front center" style="justify-content:center">${frontFaceHTML(c)}</div>
+        <div class="face back">${backFaceHTML(c)}</div>
+      </div>
+    </div>
+    <div class="spacer"></div>
+    <div class="btnrow">
+      <button class="btn" onclick="APP.flowSkip()">Skip ⏭</button>
+      <button class="btn primary" onclick="APP.flowQuiz()">I've got it — quiz me →</button>
+    </div>
+  </div>`;
+}
+/* one MCQ for the current flow word */
+function flowQuiz() {
+  const c = FLOW.card;
+  FLOW.q = makeDeckQuestion(c, [c]); // TESTPOOL supplies distractors
+  renderFlowQ();
+}
+function renderFlowQ() {
+  const q = FLOW.q, total = FLOW.list.length;
+  $app().innerHTML = `<div class="screen">
+    <div class="topbar"><button class="iconbtn" onclick="APP.go('learn')">✕</button>
+      <span class="q-count">WORD ${FLOW.i + 1} OF ${total}</span><span class="tiny">quick check</span></div>
+    <div class="pbar"><i style="width:${((FLOW.i + 1) / total) * 100}%"></i></div>
+    <div class="panel mt14">
+      <div class="tiny">${q.prompt.sub}</div>
+      <div class="q-word" style="${q.prompt.small ? 'font-size:1.15rem;font-weight:600' : ''}">${esc(q.prompt.title)}
+        ${q.prompt.speakW ? `<button class="speak" onclick="speak('${esc(q.prompt.speakW)}')">🔊</button>` : ''}</div>
+      <div class="opts">
+        ${q.options.map((o, i) => `<button class="opt ${q.hiOpts ? 'hi' : ''}" data-i="${i}" onclick="answerFlowQ(${i})">${esc(o.t)}</button>`).join('')}
+      </div>
+      <div class="feedback" id="fb"></div>
+    </div>
+  </div>`;
+}
+function answerFlowQ(idx) {
+  const q = FLOW.q;
+  const chosen = q.options[idx];
+  document.querySelectorAll('.opt').forEach(b => b.disabled = true);
+  const btn = document.querySelector(`.opt[data-i="${idx}"]`);
+  const fb = document.getElementById('fb');
+  const w = q.card.w;
+  S.stats.quizTotal++;
+  let leveled = null;
+  if (chosen.ok) {
+    S.stats.quizCorrect++;
+    btn.classList.add('correct');
+    fb.textContent = ['Nice! 🔥', 'शाबाश! 🎉', 'You got it! 💪', 'So smooth! ✨'][Math.floor(Math.random() * 4)];
+    fb.className = 'feedback good';
+    if (masterWord(w)) { // WORD CREDIT RULE: +1 only on correct answer
+      leveled = applyVocab(S.vocab + 1);
+      S.daily.done[w] = 1;
+      touchStreak();
+    }
+  } else {
+    btn.classList.add('wrong');
+    const rightIdx = q.options.findIndex(o => o.ok);
+    const rb = document.querySelector(`.opt[data-i="${rightIdx}"]`);
+    if (rb) rb.classList.add('reveal');
+    fb.textContent = `Not quite — it's “${q.options[rightIdx].t.slice(0, 60)}”. Back for revision 🧩`;
+    fb.className = 'feedback bad';
+    missWord(w);
+  }
+  saveState();
+  setTimeout(() => {
+    const advance = () => { FLOW.i++; renderFlowCard(); };
+    if (leveled) return showLevelUp(leveled, advance);
+    advance();
+  }, chosen.ok ? 750 : 1700);
+}
+function finishFlow() {
+  const total = S.daily.words.length;
+  const done = dailyDoneCount();
+  const allDone = done >= total && total > 0;
+  saveState();
+  $app().innerHTML = `<div class="screen">${topbar()}
+    <div class="panel center">
+      <h2>${allDone ? 'Today’s words complete! 🎉' : 'Great session! 💪'}</h2>
+      <div class="mt14">${ringSVG(total ? done / total : 0, 140, `<b style="font-size:1.4rem">${done}/${total}</b>`)}</div>
+      <p class="muted mt14">${done} words mastered today.${Object.keys(S.tricky).length ? ` ${Object.keys(S.tricky).length} tricky word(s) queued for revision 🧩.` : ''}</p>
+      ${allDone ? `<p class="mt8 flame">🔥 Daily ${total} complete — bonus flame!</p>` : ''}
+      <div class="btnrow mt14">
+        <button class="btn" onclick="APP.go('learn')">Words</button>
+        <button class="btn primary" onclick="APP.go('home')">Dashboard</button>
+      </div>
+    </div>
+  </div>`;
+  if (allDone) confettiBurst(120);
+}
+
+/* =============== WORD VIDEOS (real clips via YouGlish) =============== */
+let YG_LOADED = false;
+function loadYouglishScript() {
+  return new Promise((res, rej) => {
+    if (YG_LOADED && window.YG) return res();
+    const s = document.createElement('script');
+    s.src = 'https://youglish.com/public/emb/widget.js';
+    s.async = true;
+    s.onload = () => { YG_LOADED = true; res(); };
+    s.onerror = () => rej(new Error('yg'));
+    document.head.appendChild(s);
+    setTimeout(() => (window.YG ? res() : rej(new Error('yg timeout'))), 7000);
+  });
+}
+function showVideos(word) {
+  speechSynthesis && speechSynthesis.cancel();
+  const ov = document.createElement('div');
+  ov.className = 'overlay';
+  ov.innerHTML = `<div class="sheet" style="max-width:460px">
+    <div class="rowline"><h3>▶ “${esc(word)}” in real videos</h3>
+      <button class="iconbtn" onclick="this.closest('.overlay').remove()">✕</button></div>
+    <p class="tiny">Real clips from movies, news, talks & podcasts — pronounced by native speakers. Powered by YouGlish.</p>
+    <div id="ygbox" style="margin-top:12px;min-height:220px;display:grid;place-items:center">
+      <span class="tiny">Loading real videos…</span></div>
+  </div>`;
+  ov.addEventListener('click', e => { if (e.target === ov) ov.remove(); });
+  document.body.appendChild(ov);
+  loadYouglishScript().then(() => {
+    const box = document.getElementById('ygbox');
+    if (!box) return;
+    box.innerHTML = '<div id="ygwidget"></div>';
+    try {
+      const widget = new window.YG.Widget('ygwidget', {
+        width: 400,
+        components: 3, // video + caption + phonetic (no speech-coach mic)
+        events: { onFetchDone: (e) => { if (e.totalResult === 0) box.innerHTML = '<span class="tiny">No clips found for this word.</span>'; } },
+      });
+      widget.fetch(word, 'english');
+    } catch (e) {
+      box.innerHTML = `<a class="btn small" href="https://youglish.com/pronounce/${encodeURIComponent(word)}/english" target="_blank" rel="noopener">Open on YouGlish ↗</a>`;
+    }
+  }).catch(() => {
+    const box = document.getElementById('ygbox');
+    if (box) box.innerHTML = `<a class="btn small" href="https://youglish.com/pronounce/${encodeURIComponent(word)}/english" target="_blank" rel="noopener">Open real videos on YouGlish ↗</a>`;
+  });
 }
 
 /* =============== DECK: flashcards =============== */
@@ -429,8 +641,8 @@ async function openDeck(idx, isTricky = false) {
 function renderFlash() {
   const c = DECK.cards[DECK.i];
   if (!c) return;
+  CUR_FLASH = c;
   const n = DECK.cards.length;
-  const ex2 = personalExample(c);
   $app().innerHTML = `<div class="screen">
     <div class="topbar"><button class="iconbtn" onclick="APP.go('learn')">✕</button>
       <span class="q-count">CARD ${DECK.i + 1} OF ${n}</span>
@@ -439,26 +651,8 @@ function renderFlash() {
     <div class="spacer"></div>
     <div class="flash" id="flash" onclick="document.getElementById('flash').classList.toggle('flipped')">
       <div class="flash-inner">
-        <div class="face front center" style="justify-content:center">
-          <div class="word-big">${esc(c.w)}</div>
-          ${c.ipa ? `<div class="ipa">${esc(c.ipa)}</div>` : ''}
-          <div class="mt14">${c.pos ? `<span class="pos-chip">${esc(c.pos)}</span>` : ''}</div>
-          <p class="tiny mt20">tap to flip 🔄</p>
-        </div>
-        <div class="face back">
-          <div class="rowline"><b style="font-size:1.2rem">${esc(c.w)}</b>
-            <button class="speak" onclick="event.stopPropagation();speakFlash()">🔊</button></div>
-          <div class="label">English meaning</div>
-          <div class="meaning-en">${esc(c.def || '(definition unavailable offline)')}</div>
-          <div class="label">हिंदी अर्थ</div>
-          <div class="meaning-hi hi">${esc(c.hi || 'उपलब्ध नहीं — connect online for Hindi')}
-            ${S.hinglish && c.hi ? `<div class="tiny">${esc(hinglish(c.hi))}</div>` : ''}</div>
-          <div class="label">How to use it</div>
-          <div class="ex">${c.ex ? boldWord(c.ex, c.w) : boldWord(genericExample(c), c.w)}</div>
-          <div class="ex">${boldWord(ex2, c.w)}</div>
-          ${c.syns && c.syns.length ? `<div class="label">Synonyms ${c.ant ? '· Antonym' : ''}</div>
-          <div class="syn-chips">${c.syns.map(s => `<span>${esc(s)}</span>`).join('')}${c.ant ? `<span class="ant">✗ ${esc(c.ant)}</span>` : ''}</div>` : (c.ant ? `<div class="label">Antonym</div><div class="syn-chips"><span class="ant">✗ ${esc(c.ant)}</span></div>` : '')}
-        </div>
+        <div class="face front center" style="justify-content:center">${frontFaceHTML(c)}</div>
+        <div class="face back">${backFaceHTML(c)}</div>
       </div>
     </div>
     <div class="spacer"></div>
@@ -502,7 +696,7 @@ function makeDeckQuestion(card, deckCards) {
   let prompt, options;
   if (kind === 'en') {
     const wrong = shuffled(TESTPOOL[card.band ?? 0].filter(([x, d]) => x !== card.w && d !== card.def)).slice(0, 3).map(([, d]) => d);
-    while (wrong.length < 3) wrong.push(shuffled(others)[0].def);
+    while (wrong.length < 3) { const o = shuffled(others)[0]; if (!o || !o.def) break; if (!wrong.includes(o.def)) wrong.push(o.def); else break; }
     prompt = { title: card.w, sub: 'Pick the correct English meaning', speakW: card.w };
     options = shuffled([{ t: card.def, ok: true }, ...wrong.slice(0, 3).map(t => ({ t, ok: false }))]);
   } else if (kind === 'hi') {
@@ -787,7 +981,8 @@ function viewSettings() {
       • Word frequencies: <b>FrequencyWords / OpenSubtitles 2018</b> (hermitdave, CC BY-SA 4.0)<br>
       • Definitions & synonyms: <b>Princeton WordNet 3.x</b> (WordNet License) & <b>Webster's Unabridged</b> (public domain)<br>
       • Pronunciations: <b>open-dict-data/ipa-dict</b> (MIT)<br>
-      • Live definitions: <b>Free Dictionary API</b> (dictionaryapi.dev)<br>
+      • Live definitions & human pronunciations: <b>Free Dictionary API</b> (dictionaryapi.dev)<br>
+      • Real-video word examples: <b>YouGlish</b> (youglish.com)<br>
       Modified word data in this app is shared under the same licenses (CC BY-SA where applicable).</p>
     </div>
     <div class="panel">

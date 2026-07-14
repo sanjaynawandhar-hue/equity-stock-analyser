@@ -124,6 +124,14 @@ async function getCard(w) {
       const e = j[0];
       if (e) {
         card.ipa = card.ipa || (e.phonetic || (e.phonetics || []).map(p => p.text).find(Boolean) || '');
+        // human pronunciation recording (native speaker)
+        if (!card.audio) {
+          for (const ee of j) {
+            const a = (ee.phonetics || []).map(p => p.audio).find(u => u && /^https?:\/\//.test(u));
+            if (a) { card.audio = a; break; }
+          }
+        }
+        if (card.audio) AUDIO.set(w, card.audio);
         const m = (e.meanings || [])[0];
         if (m) {
           card.pos = card.pos || m.partOfSpeech || '';
@@ -304,32 +312,84 @@ function pickVoice() {
   }
   return best;
 }
-function speak(word, meaning) {
+/* device TTS utterance (fallback + meaning sentences) */
+function ttsSay(text) {
+  if (!VOICE) VOICE = pickVoice();
+  const u = new SpeechSynthesisUtterance(text);
+  if (VOICE) { u.voice = VOICE; u.lang = VOICE.lang; }
+  else u.lang = 'en-IN';
+  u.rate = .9;
+  u.pitch = S && S.voicePref === 'male' ? 1 : 1.12;
+  speechSynthesis.speak(u);
+}
+
+/* Real human pronunciation recordings from the Free Dictionary API
+   (native UK/US speakers) — far clearer than device TTS. Cached per word;
+   '' means "looked up, none available". */
+const AUDIO = new Map();
+let curClip = null;
+async function resolveAudio(word) {
+  if (AUDIO.has(word)) return AUDIO.get(word);
+  let url = '';
+  try {
+    const r = await fetch('https://api.dictionaryapi.dev/api/v2/entries/en/' + encodeURIComponent(word), { signal: AbortSignal.timeout(5000) });
+    if (r.ok) {
+      const j = await r.json();
+      for (const e of j) {
+        const a = (e.phonetics || []).map(p => p.audio).find(u => u && /^https?:\/\//.test(u));
+        if (a) { url = a; break; }
+      }
+    }
+  } catch (e) { /* offline */ }
+  AUDIO.set(word, url);
+  return url;
+}
+function playClip(url) {
+  return new Promise((res, rej) => {
+    try {
+      if (curClip) { curClip.pause(); curClip = null; }
+      const a = new Audio(url);
+      curClip = a;
+      a.onended = () => res(true);
+      a.onerror = () => rej(new Error('audio'));
+      a.play().then(() => {}).catch(rej);
+    } catch (e) { rej(e); }
+  });
+}
+
+/* Pronounce a word (human recording first, TTS fallback), then optionally
+   its English meaning via TTS. audioUrl may be supplied from a card. */
+async function speak(word, meaning, audioUrl) {
   try {
     speechSynthesis.cancel();
-    if (!VOICE) VOICE = pickVoice();
-    const say = (text) => {
-      const u = new SpeechSynthesisUtterance(text);
-      if (VOICE) { u.voice = VOICE; u.lang = VOICE.lang; }
-      else u.lang = 'en-IN';
-      u.rate = .9;
-      u.pitch = S && S.voicePref === 'male' ? 1 : 1.12; // female reads a touch sweeter
-      speechSynthesis.speak(u); // queues after any pending utterance
-    };
-    say(word);
-    if (meaning) say('It means. ' + meaning); // spoken after the word, with a pause
+    let saidWord = false;
+    const url = audioUrl || await resolveAudio(word);
+    if (url) { try { await playClip(url); saidWord = true; } catch (e) {} }
+    if (!saidWord) ttsSay(word);
+    if (meaning) ttsSay('It means. ' + meaning);
   } catch (e) {}
 }
-/* speak the flashcard currently on screen (word + English meaning) */
+/* speak the flashcard currently on screen (word + English meaning).
+   CUR_FLASH is set by whichever renderer is showing a card. */
+let CUR_FLASH = null;
 function speakFlash() {
-  const c = DECK.cards[DECK.i];
-  if (c) speak(c.w, c.def || '');
+  if (CUR_FLASH) speak(CUR_FLASH.w, CUR_FLASH.def || '', CUR_FLASH.audio);
 }
 /* speak the dashboard Word of the Day (card cached once fetched) */
 let WOD_CARD = null;
 function speakWod() {
-  if (WOD_CARD) speak(WOD_CARD.w, WOD_CARD.def || '');
+  if (WOD_CARD) speak(WOD_CARD.w, WOD_CARD.def || '', WOD_CARD.audio);
   else speak(S.wodWord || '');
+}
+/* pick a fresh Word of the Day on demand (refresh button) */
+function rerollWod() {
+  const pool = [...SEED.keys()];
+  let w = S.wodWord;
+  for (let i = 0; i < 20 && (w === S.wodWord || !w); i++) w = pool[Math.floor(Math.random() * pool.length)];
+  S.wodWord = w;
+  S.wodDate = todayStr();
+  saveState();
+  return w;
 }
 if ('speechSynthesis' in window) {
   speechSynthesis.addEventListener?.('voiceschanged', () => { VOICE = pickVoice(); });
