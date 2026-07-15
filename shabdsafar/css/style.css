@@ -60,6 +60,59 @@
   --panel-solid: #ffffff;
 }
 
+/* ============================================================
+   Accent palettes — switchable in Settings (data-accent on <html>).
+   Higher specificity than the theme blocks above, so these win.
+   ============================================================ */
+:root[data-theme="dark"][data-accent="ocean"] {
+  --accent: #2dd4bf; --accent2: #3b82f6; --accent-ink: #032422;
+  --grad: linear-gradient(135deg, #5eead4 0%, #2dd4bf 45%, #3b82f6 100%);
+  --glow: 0 8px 32px -6px rgba(45, 212, 191, .42);
+  --aur1: rgba(37, 99, 235, .34); --aur2: rgba(45, 212, 191, .18); --aur3: rgba(56, 189, 248, .2);
+}
+:root[data-theme="light"][data-accent="ocean"] {
+  --accent: #0d9488; --accent2: #2563eb; --accent-ink: #ffffff;
+  --grad: linear-gradient(135deg, #14b8a6 0%, #0ea5e9 55%, #2563eb 100%);
+  --glow: 0 8px 28px -8px rgba(13, 148, 136, .5);
+  --aur1: rgba(37, 99, 235, .18); --aur2: rgba(45, 212, 191, .22); --aur3: rgba(56, 189, 248, .14);
+}
+:root[data-theme="dark"][data-accent="sunset"] {
+  --accent: #ffb03a; --accent2: #ff5f4e; --accent-ink: #2a1400;
+  --grad: linear-gradient(135deg, #ffb03a 0%, #ff8a3d 55%, #ff5f4e 100%);
+  --glow: 0 8px 32px -6px rgba(255, 138, 61, .45);
+  --aur1: rgba(88, 74, 228, .32); --aur2: rgba(255, 138, 61, .16); --aur3: rgba(168, 85, 247, .2);
+}
+:root[data-theme="light"][data-accent="sunset"] {
+  --accent: #ec8500; --accent2: #e6472f; --accent-ink: #ffffff;
+  --grad: linear-gradient(135deg, #ffb03a 0%, #ff8a3d 55%, #ff5f4e 100%);
+  --glow: 0 8px 28px -8px rgba(236, 133, 0, .5);
+  --aur1: rgba(120, 110, 255, .2); --aur2: rgba(255, 170, 60, .22); --aur3: rgba(236, 72, 153, .1);
+}
+:root[data-theme="dark"][data-accent="violet"] {
+  --accent: #c084fc; --accent2: #ec4899; --accent-ink: #240733;
+  --grad: linear-gradient(135deg, #c084fc 0%, #a855f7 50%, #ec4899 100%);
+  --glow: 0 8px 32px -6px rgba(192, 132, 252, .45);
+  --aur1: rgba(124, 58, 237, .34); --aur2: rgba(236, 72, 153, .18); --aur3: rgba(168, 85, 247, .22);
+}
+:root[data-theme="light"][data-accent="violet"] {
+  --accent: #9333ea; --accent2: #db2777; --accent-ink: #ffffff;
+  --grad: linear-gradient(135deg, #a855f7 0%, #c026d3 55%, #db2777 100%);
+  --glow: 0 8px 28px -8px rgba(147, 51, 234, .5);
+  --aur1: rgba(147, 51, 234, .18); --aur2: rgba(236, 72, 153, .2); --aur3: rgba(168, 85, 247, .14);
+}
+:root[data-theme="dark"][data-accent="tropical"] {
+  --accent: #4ade80; --accent2: #14b8a6; --accent-ink: #032a13;
+  --grad: linear-gradient(135deg, #86efac 0%, #4ade80 45%, #14b8a6 100%);
+  --glow: 0 8px 32px -6px rgba(74, 222, 128, .4);
+  --aur1: rgba(16, 185, 129, .3); --aur2: rgba(74, 222, 128, .16); --aur3: rgba(20, 184, 166, .2);
+}
+:root[data-theme="light"][data-accent="tropical"] {
+  --accent: #059669; --accent2: #0d9488; --accent-ink: #ffffff;
+  --grad: linear-gradient(135deg, #22c55e 0%, #10b981 55%, #0d9488 100%);
+  --glow: 0 8px 28px -8px rgba(5, 150, 105, .5);
+  --aur1: rgba(16, 185, 129, .18); --aur2: rgba(74, 222, 128, .2); --aur3: rgba(20, 184, 166, .14);
+}
+
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 html { font-size: 16px; scroll-behavior: smooth; }
 body {
@@ -520,6 +573,55 @@ input[type="checkbox"]:checked::after { transform: translateX(19px); }
 .ygframe iframe { width: 320px !important; border: 0 !important; margin-top: -156px !important; display: block; }
 .ygmask { position: absolute; top: 0; left: 0; right: 0; height: 22px; background: #000; z-index: 2; pointer-events: none; }
 .ygload { position: absolute; inset: 0; display: grid; place-items: center; z-index: 3; pointer-events: none; }
+
+/* ---- @professorSK branded welcome card (Home) ---- */
+.brandcard {
+  display: flex; align-items: center; gap: 14px;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--accent) 20%, var(--glass)), var(--glass) 60%),
+    var(--glass);
+  border-color: color-mix(in srgb, var(--accent) 32%, var(--line));
+  overflow: hidden; position: relative;
+}
+.brandcard::after {
+  content: ''; position: absolute; right: -30px; top: -40px;
+  width: 130px; height: 130px; border-radius: 50%;
+  background: var(--grad); opacity: .14; filter: blur(6px); pointer-events: none;
+}
+.bc-avatar {
+  flex: 0 0 auto; width: 52px; height: 52px; border-radius: 50%;
+  background: var(--grad); color: var(--accent-ink);
+  display: grid; place-items: center;
+  font-weight: 900; font-size: 1.05rem; letter-spacing: .02em;
+  box-shadow: var(--glow);
+}
+.bc-name { font-weight: 900; font-size: 1.12rem; letter-spacing: -.02em; }
+.bc-name span {
+  background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.bc-sub { font-size: .8rem; color: var(--dim); font-weight: 600; }
+
+/* ---- accent theme swatches (Settings) ---- */
+.swatches { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 10px; }
+.swatch {
+  width: 46px; height: 46px; border-radius: 50%; cursor: pointer;
+  border: 2.5px solid var(--line); padding: 0;
+  transition: transform .18s var(--spring), border-color .2s;
+  position: relative;
+}
+.swatch:hover { transform: scale(1.1); }
+.swatch:active { transform: scale(.92); }
+.swatch.on { border-color: var(--text); }
+.swatch.on::after {
+  content: '✓'; position: absolute; inset: 0;
+  display: grid; place-items: center;
+  color: #fff; font-weight: 900; font-size: 1.1rem;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, .5);
+}
+.sw-ocean { background: linear-gradient(135deg, #5eead4, #2dd4bf 45%, #3b82f6); }
+.sw-sunset { background: linear-gradient(135deg, #ffb03a, #ff8a3d 55%, #ff5f4e); }
+.sw-violet { background: linear-gradient(135deg, #c084fc, #a855f7 50%, #ec4899); }
+.sw-tropical { background: linear-gradient(135deg, #86efac, #4ade80 45%, #14b8a6); }
 
 /* streak flame */
 .flame { display: inline-flex; align-items: center; gap: 5px; font-weight: 800; color: var(--accent); }

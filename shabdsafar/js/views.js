@@ -20,7 +20,7 @@ function ringSVG(pct, size, label, sub) {
   return `<div class="ringwrap">
     <svg width="${size}" height="${size}">
       <defs><linearGradient id="${uid}" x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0" stop-color="#ffb03a"/><stop offset="1" stop-color="#ff7847"/>
+        <stop offset="0" stop-color="var(--accent)"/><stop offset="1" stop-color="var(--accent2)"/>
       </linearGradient></defs>
       <circle class="ring-track" cx="${size / 2}" cy="${size / 2}" r="${r}" stroke-width="10"/>
       <circle class="ring-val" cx="${size / 2}" cy="${size / 2}" r="${r}" stroke-width="10"
@@ -336,6 +336,14 @@ function viewHome() {
   const due = dueTricky().length;
   const weekly = weeklyDue();
   $app().innerHTML = `<div class="screen">${topbar()}
+    <div class="panel brandcard">
+      <div class="bc-avatar">SK</div>
+      <div>
+        <div class="bc-name">@<span>professorSK</span></div>
+        <div class="bc-sub">Your English coach 🧭</div>
+      </div>
+    </div>
+    <div class="spacer"></div>
     ${weekly ? `<button class="panel rowline" style="width:100%;cursor:pointer;border-color:var(--accent)" onclick="APP.go('weeklyIntro')">
       <span style="font-weight:800">Weekly Test Ready 🏆</span><span class="tiny">Re-rate your vocabulary →</span></button><div class="spacer"></div>` : ''}
     <div class="panel">
@@ -987,6 +995,13 @@ function viewSettings() {
       <label class="rowline" style="cursor:pointer"><span>🌗 Dark theme</span>
         <input type="checkbox" ${S.theme === 'dark' ? 'checked' : ''} onchange="APP.toggleTheme()"></label>
       <div class="spacer"></div>
+      <div><span>🎨 Colour theme</span>
+        <div class="swatches">
+          ${[['ocean', 'Ocean'], ['sunset', 'Sunset'], ['violet', 'Violet'], ['tropical', 'Tropical']].map(([a, n]) =>
+            `<button class="swatch sw-${a} ${(S.accent || 'ocean') === a ? 'on' : ''}" data-a="${a}" title="${n}" aria-label="${n}" onclick="APP.setAccent('${a}')"></button>`).join('')}
+        </div>
+      </div>
+      <div class="spacer"></div>
       <label class="rowline" style="cursor:pointer"><span>अ Hinglish transliteration</span>
         <input type="checkbox" ${S.hinglish ? 'checked' : ''} onchange="S.hinglish=this.checked;saveState();toast('Saved')"></label>
       <div class="spacer"></div>
@@ -1047,20 +1062,26 @@ async function shareCard(kind) {
   cv.width = W; cv.height = H;
   const ctx = cv.getContext('2d');
   const L = displayLevel();
+  // follow the user's chosen colour theme
+  const css = getComputedStyle(document.documentElement);
+  const AC = (css.getPropertyValue('--accent') || '#2dd4bf').trim();
+  const AC2 = (css.getPropertyValue('--accent2') || '#3b82f6').trim();
   // bg
   const g = ctx.createLinearGradient(0, 0, W, H);
   g.addColorStop(0, '#141a3c'); g.addColorStop(1, '#0c1024');
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
   const g2 = ctx.createRadialGradient(W * .8, H * .1, 0, W * .8, H * .1, W * .8);
-  g2.addColorStop(0, 'rgba(255,176,58,.22)'); g2.addColorStop(1, 'transparent');
+  g2.addColorStop(0, AC2); g2.addColorStop(1, 'transparent');
+  ctx.globalAlpha = .22;
   ctx.fillStyle = g2; ctx.fillRect(0, 0, W, H);
+  ctx.globalAlpha = 1;
   const cx = W / 2;
   let y = story ? 300 : 130;
   ctx.textAlign = 'center';
   ctx.fillStyle = '#eef0fb';
   ctx.font = '900 84px system-ui, sans-serif';
   ctx.fillText('ShabdSafar', cx, y);
-  ctx.fillStyle = '#ffb03a';
+  ctx.fillStyle = AC;
   ctx.font = '700 34px system-ui, sans-serif';
   ctx.fillText('A  S A F A R  T O  G E N I U S', cx, y + 56);
   // badge
@@ -1076,13 +1097,13 @@ async function shareCard(kind) {
     const t = S.testHistory[S.testHistory.length - 1];
     const diff = t.estimate - (t.prevVocab ?? t.estimate);
     ctx.fillText(`I know ~${fmt(S.vocab)} of 60,000 words`, cx, y);
-    ctx.fillStyle = diff >= 0 ? '#37d38a' : '#ffb03a';
+    ctx.fillStyle = diff >= 0 ? '#37d38a' : AC;
     ctx.font = '900 58px system-ui, sans-serif';
     ctx.fillText(`${diff >= 0 ? '+' : ''}${fmt(diff)} words this week 🔥`, cx, y + 84);
     y += 84;
   } else {
     ctx.fillText(`I know ~${fmt(S.vocab)} of 60,000 words`, cx, y);
-    ctx.fillStyle = '#ffb03a';
+    ctx.fillStyle = AC;
     ctx.font = '900 58px system-ui, sans-serif';
     ctx.fillText(`I'm ${'AEIOU'.includes(L.name[0]) ? 'an' : 'a'} ${L.name.toUpperCase()} — can you beat me?`, cx, y + 84);
     y += 84;

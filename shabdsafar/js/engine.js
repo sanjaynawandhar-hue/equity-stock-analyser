@@ -20,6 +20,7 @@ const DEFAULT_STATE = () => ({
   favMovie: '',
   favBook: '',
   theme: 'dark',
+  accent: 'ocean',        // color theme: ocean | sunset | violet | tropical
   hinglish: false,
   timerOn: false,
   voicePref: 'female',   // 'female' | 'male' pronunciation voice

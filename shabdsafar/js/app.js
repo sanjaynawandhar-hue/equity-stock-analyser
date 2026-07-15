@@ -49,6 +49,13 @@ const APP = {
     speak('Welcome to ShabdSafar');
     toast(pref === 'male' ? 'Male voice selected 👨' : 'Female voice selected 👩');
   },
+  setAccent(a) {
+    S.accent = a;
+    document.documentElement.dataset.accent = a;
+    saveState();
+    document.querySelectorAll('.swatch').forEach(b => b.classList.toggle('on', b.dataset.a === a));
+    toast('Colour theme updated 🎨');
+  },
   toggleTheme() {
     S.theme = S.theme === 'dark' ? 'light' : 'dark';
     document.documentElement.dataset.theme = S.theme;
@@ -98,6 +105,7 @@ window.showVideos = showVideos;
 (async function init() {
   loadState();
   document.documentElement.dataset.theme = S.theme;
+  document.documentElement.dataset.accent = S.accent || 'ocean';
   const app = document.getElementById('app');
   app.innerHTML = `<div class="screen splash">
     <div class="mark">🚶‍♂️➡️🏔️</div>
