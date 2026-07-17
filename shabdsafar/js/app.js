@@ -49,6 +49,10 @@ const APP = {
     speak('Welcome to ShabdSafar');
     toast(pref === 'male' ? 'Male voice selected 👨' : 'Female voice selected 👩');
   },
+  onSearch(v) { onSearch(v); },
+  clearSearch() { clearSearch(); },
+  searchEnter() { searchEnter(); },
+  openWord(w) { openWordDetail(w); },
   setAccent(a) {
     S.accent = a;
     document.documentElement.dataset.accent = a;

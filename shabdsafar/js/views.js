@@ -344,6 +344,8 @@ function viewHome() {
       </div>
     </div>
     <div class="spacer"></div>
+    ${searchBarHTML()}
+    <div class="spacer"></div>
     ${weekly ? `<button class="panel rowline" style="width:100%;cursor:pointer;border-color:var(--accent)" onclick="APP.go('weeklyIntro')">
       <span style="font-weight:800">Weekly Test Ready 🏆</span><span class="tiny">Re-rate your vocabulary →</span></button><div class="spacer"></div>` : ''}
     <div class="panel">
@@ -378,6 +380,94 @@ function viewHome() {
     ${footer()}
   ${navbar('home')}</div>`;
   loadWodBody();
+}
+
+/* =============== SEARCH =============== */
+function searchBarHTML() {
+  return `<div class="searchwrap">
+    <span class="search-ico">🔍</span>
+    <input class="txt search-input" id="searchBox" type="search" autocomplete="off"
+      placeholder="Search any word…" oninput="APP.onSearch(this.value)"
+      onkeydown="if(event.key==='Enter')APP.searchEnter()">
+    <button class="search-clear" id="searchClear" onclick="APP.clearSearch()" style="display:none">✕</button>
+    <div class="sugg" id="sugg"></div>
+  </div>`;
+}
+let SEARCH_T = null, SUGG = [];
+function onSearch(v) {
+  clearTimeout(SEARCH_T);
+  const clear = document.getElementById('searchClear');
+  if (clear) clear.style.display = v ? 'grid' : 'none';
+  SEARCH_T = setTimeout(() => renderSuggestions(v), 110);
+}
+function renderSuggestions(v) {
+  const box = document.getElementById('sugg');
+  if (!box) return;
+  const q = (v || '').trim().toLowerCase();
+  if (q.length < 1) { box.classList.remove('open'); box.innerHTML = ''; SUGG = []; return; }
+  SUGG = searchWords(q, 8);
+  if (!SUGG.length) {
+    box.classList.add('open');
+    box.innerHTML = `<div class="sugg-empty tiny">No word found for “${esc(q)}”</div>`;
+    return;
+  }
+  box.classList.add('open');
+  box.innerHTML = SUGG.map(w => {
+    const h = wordHint(w);
+    return `<button class="sugg-row" onclick="APP.openWord('${esc(w)}')">
+      <div class="sugg-w">${esc(w)}</div>
+      ${h.def ? `<div class="sugg-d">${esc(h.def)}</div>` : ''}
+      ${h.hi ? `<div class="sugg-h hi">${esc(h.hi)}</div>` : ''}
+      ${!h.def && !h.hi ? `<div class="sugg-d">tap to see the meaning</div>` : ''}
+    </button>`;
+  }).join('');
+}
+function clearSearch() {
+  const i = document.getElementById('searchBox');
+  if (i) { i.value = ''; i.focus(); }
+  const c = document.getElementById('searchClear');
+  if (c) c.style.display = 'none';
+  renderSuggestions('');
+}
+function searchEnter() {
+  if (SUGG.length) openWordDetail(SUGG[0]);
+}
+/* full word card for a searched word */
+async function openWordDetail(w) {
+  const box = document.getElementById('sugg');
+  if (box) { box.classList.remove('open'); box.innerHTML = ''; }
+  document.querySelectorAll('.overlay').forEach(o => o.remove());
+  const ov = document.createElement('div');
+  ov.className = 'overlay';
+  ov.innerHTML = `<div class="sheet" style="text-align:left;max-width:460px">
+    <div class="rowline"><h2 style="text-transform:none">${esc(w)}</h2>
+      <button class="iconbtn" onclick="this.closest('.overlay').remove()">✕</button></div>
+    <div id="wdBody" class="center mt14"><span class="tiny">loading word…</span></div>
+  </div>`;
+  ov.addEventListener('click', e => { if (e.target === ov) ov.remove(); });
+  document.body.appendChild(ov);
+  const c = await getCard(w);
+  CUR_FLASH = c;
+  const body = document.getElementById('wdBody');
+  if (!body) return;
+  body.className = '';
+  body.innerHTML = `
+    <div class="rowline">
+      <div>${c.ipa ? `<span class="ipa">${esc(c.ipa)}</span> ` : ''}
+        ${c.pos ? `<span class="pos-chip">${esc(c.pos)}</span>` : ''}</div>
+      <button class="speak" onclick="speakFlash()" title="hear the word & meaning">🔊</button>
+    </div>
+    <div class="label">English meaning</div>
+    <div class="meaning-en">${esc(c.def || '(no definition found — try another spelling)')}</div>
+    <div class="label">हिंदी अर्थ</div>
+    <div class="meaning-hi hi">${esc(c.hi || 'उपलब्ध नहीं')}
+      ${S.hinglish && c.hi ? `<div class="tiny">${esc(hinglish(c.hi))}</div>` : ''}</div>
+    ${c.def ? `<div class="label">How to use it</div>
+    <div class="ex">${c.ex ? boldWord(c.ex, c.w) : boldWord(genericExample(c), c.w)}</div>
+    <div class="ex">${boldWord(personalExample(c), c.w)}</div>` : ''}
+    ${synsHTML(c)}
+    <div class="mt14">${videoBlockHTML(c.w)}</div>`;
+  mountVideo(c.w);
 }
 
 /* ---- Word of the Day card (refreshable) ---- */

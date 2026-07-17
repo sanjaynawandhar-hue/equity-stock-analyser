@@ -577,6 +577,39 @@ async function buildWeeklyQuestions() {
   return shuffled(fresh.concat(ret));
 }
 
+/* ---------------- search ---------------- */
+/* Suggest words from the 102k index. WORDS is frequency-ordered, so the
+   first matches are the most useful ones. Prefix matches rank above
+   "contains" matches. */
+function searchWords(q, limit = 8) {
+  q = (q || '').trim().toLowerCase();
+  if (!q || !/^[a-z][a-z' -]*$/.test(q)) return [];
+  const pre = [], sub = [];
+  for (let i = 0; i < WORDS.length; i++) {
+    const w = WORDS[i];
+    if (w.startsWith(q) && !isBlocked(w)) {
+      pre.push(w);
+      if (pre.length >= limit) break;
+    }
+  }
+  if (pre.length < limit) {
+    for (let i = 0; i < WORDS.length; i++) {
+      const w = WORDS[i];
+      if (w.includes(q) && !w.startsWith(q) && !isBlocked(w)) {
+        sub.push(w);
+        if (pre.length + sub.length >= limit) break;
+      }
+    }
+  }
+  return pre.concat(sub).slice(0, limit);
+}
+/* short meaning hint for a suggestion row (from bundled cards, no network) */
+function wordHint(w) {
+  const c = SEED.get(w) || LITE.get(w);
+  if (!c) return { def: '', hi: '' };
+  return { def: (c.def || '').slice(0, 68), hi: c.hi || '' };
+}
+
 /* ---------------- word of the day ---------------- */
 function wordOfDay() {
   const today = todayStr();

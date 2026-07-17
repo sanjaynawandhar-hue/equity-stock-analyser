@@ -601,6 +601,42 @@ input[type="checkbox"]:checked::after { transform: translateX(19px); }
 }
 .bc-sub { font-size: .8rem; color: var(--dim); font-weight: 600; }
 
+/* ---- search bar + suggestions ---- */
+.searchwrap { position: relative; z-index: 20; }
+.search-ico {
+  position: absolute; left: 15px; top: 50%; transform: translateY(-50%);
+  font-size: .95rem; opacity: .7; pointer-events: none;
+}
+.search-input { padding-left: 42px !important; padding-right: 40px !important; }
+.search-input::-webkit-search-cancel-button { display: none; }
+.search-clear {
+  position: absolute; right: 9px; top: 50%; transform: translateY(-50%);
+  width: 26px; height: 26px; border-radius: 50%; cursor: pointer;
+  background: var(--glass-2); border: 1px solid var(--line); color: var(--dim);
+  display: grid; place-items: center; font-size: .7rem; padding: 0;
+}
+.sugg {
+  position: absolute; top: calc(100% + 8px); left: 0; right: 0; z-index: 30;
+  background: color-mix(in srgb, var(--panel-solid) 94%, transparent);
+  backdrop-filter: blur(24px) saturate(160%); -webkit-backdrop-filter: blur(24px) saturate(160%);
+  border: 1px solid var(--line-strong); border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  max-height: 340px; overflow-y: auto;
+  display: none; padding: 6px;
+}
+.sugg.open { display: block; animation: optIn .22s var(--spring) both; }
+.sugg-row {
+  display: block; width: 100%; text-align: left; cursor: pointer;
+  background: none; border: 0; border-radius: 12px;
+  padding: 10px 12px; color: var(--text);
+  transition: background .15s;
+}
+.sugg-row:hover, .sugg-row:focus-visible { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.sugg-w { font-weight: 800; font-size: 1rem; letter-spacing: -.01em; }
+.sugg-d { font-size: .78rem; color: var(--dim); margin-top: 1px; }
+.sugg-h { font-size: .84rem; color: var(--accent); font-weight: 600; margin-top: 1px; }
+.sugg-empty { padding: 14px; text-align: center; }
+
 /* ---- accent theme swatches (Settings) ---- */
 .swatches { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 10px; }
 .swatch {
