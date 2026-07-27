@@ -20,6 +20,18 @@
     return data;
   }
 
+  // Dedup identical in-flight GETs (esp. /api/history) so the chart, signals and
+  // comparison share ONE fetch instead of hitting the proxy multiple times.
+  const inflight = new Map();
+  function apiOnce(path) {
+    if (inflight.has(path)) return inflight.get(path);
+    const p = api(path);
+    inflight.set(path, p);
+    p.finally(() => setTimeout(() => inflight.delete(path), 3000));
+    return p;
+  }
+  const STOCK_HIST = (sym) => '/api/history?symbol=' + encodeURIComponent(sym) + '&range=10y&interval=1d&events=div,splits';
+
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -304,8 +316,8 @@
     host.innerHTML = '<div class="skeleton" style="height:320px;border-radius:12px"></div>';
 
     const [stockR, niftyR] = await Promise.allSettled([
-      api('/api/history?symbol=' + encodeURIComponent(symbol) + '&range=10y&interval=1wk&events='),
-      api('/api/history?symbol=' + encodeURIComponent('^NSEI') + '&range=10y&interval=1wk&events='),
+      apiOnce(STOCK_HIST(symbol)),  // shares the price chart's fetch (no extra proxy call)
+      apiOnce('/api/history?symbol=' + encodeURIComponent('^NSEI') + '&range=10y&interval=1wk&events='),
     ]);
     if (stockR.status !== 'fulfilled' || niftyR.status !== 'fulfilled') {
       host.innerHTML = '<p class="muted" style="padding:24px 8px">Comparison unavailable — index data could not be loaded.</p>';
@@ -481,7 +493,7 @@
     report.appendChild(trendCard);
 
     let history;
-    try { history = await api('/api/history?symbol=' + encodeURIComponent(symbol) + '&range=10y&interval=1d&events='); }
+    try { history = await apiOnce(STOCK_HIST(symbol)); } // shared with the price chart (1 fetch)
     catch (_) {
       $('#recoBody', recoCard).innerHTML = '<p class="muted" style="padding:16px 4px">Not enough data to generate a signal.</p>';
       $('#trendBody', trendCard).innerHTML = '';
@@ -749,7 +761,7 @@
 
     let history;
     try {
-      history = await api('/api/history?symbol=' + encodeURIComponent(symbol) + '&range=10y&interval=1d&events=div,splits');
+      history = await apiOnce(STOCK_HIST(symbol));
     } catch (err) {
       host.innerHTML = `<p class="muted" style="padding:24px 8px">Price history unavailable${err.status === 429 ? ' (rate-limited)' : ''}.</p>`;
       return;
