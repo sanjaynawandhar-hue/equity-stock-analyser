@@ -269,53 +269,40 @@ api.get('/news', async (req, res) => {
 
 // --- Peer comparison: same-sector competitors ----------------------------
 // GET /api/peers?symbol=RELIANCE
-async function peerMetrics(symbol, forceMock) {
-  const f = await resolve({ forceMock, live: () => yahoo.quoteSummary(symbol), fake: () => mock.quoteSummary(symbol) });
-  const h = await resolve({ forceMock, live: () => yahoo.chart(symbol, { range: '1y', interval: '1wk', events: '' }), fake: () => mock.chart(symbol, { range: '1y', interval: '1wk' }) });
-  const c = h.data.candles || [];
-  const oneYearReturn = c.length > 1 && c[0].close ? ((c[c.length - 1].close - c[0].close) / c[0].close) * 100 : null;
-  return {
-    symbol: nse.nseSymbol(symbol),
-    name: f.data.name || null,
-    peRatio: f.data.peRatio ?? null,
-    marketCap: f.data.marketCap ?? null,
-    oneYearReturn: oneYearReturn == null ? null : Math.round(oneYearReturn * 100) / 100,
-    mock: !!(f.mock || h.mock),
-  };
+// Real metrics (P/E, market cap, ROCE) come from each peer's own Screener page.
+async function peerRatios(bareSymbol, dictName) {
+  try {
+    const s = await getScreener(toYahooSymbol(bareSymbol));
+    const r = s.ratios || {};
+    const real = r.peRatio != null || r.marketCap != null || r.roce != null;
+    return { symbol: bareSymbol, name: dictName || bareSymbol, peRatio: r.peRatio ?? null, marketCap: r.marketCap ?? null, roce: r.roce ?? null, mock: !real };
+  } catch (_) {
+    return { symbol: bareSymbol, name: dictName || bareSymbol, peRatio: null, marketCap: null, roce: null, mock: true };
+  }
 }
 
 api.get('/peers', async (req, res) => {
   const symbol = toYahooSymbol(req.query.symbol);
   if (!symbol) return res.status(400).json({ error: 'symbol is required' });
-  const forceMock = wantsMock(req);
-  const key = `peers:${symbol}:${forceMock ? 'm' : 'l'}`;
+  const key = `peers:${symbol}`;
 
   try {
     const { data, cached } = await cache.wrap(key, TTL.fundamentals, async () => {
-      // Sector label: dictionary first, then real sector via search.
+      // Sector: dictionary first, then real sector via Yahoo search.
       let sector = symbols.sectorOf(symbol);
-      if (!sector && !forceMock) {
+      if (!sector) {
         try { const info = await yahoo.assetInfo(symbol); sector = info && info.sector; } catch (_) { /* ignore */ }
       }
       const self = symbols.stripSuffix(symbol);
-
-      // Preferred: REAL peer table from Screener (real P/E, market cap, ROCE).
-      if (!forceMock) {
-        try {
-          const s = await getScreener(symbol);
-          if (s.peers && s.peers.length) {
-            let rows = s.peers.map((p) => ({ ...p, isSelf: p.symbol === self, mock: false }));
-            rows.sort((a, b) => (b.isSelf ? 1 : 0) - (a.isSelf ? 1 : 0)); // self first
-            return { sector: sector || null, rows: rows.slice(0, 6), source: 'screener' };
-          }
-        } catch (_) { /* fall back below */ }
-      }
-
-      // Fallback: same-sector companies from the dictionary (names only, no fake metrics).
+      const dictSelf = symbols.BY_SYMBOL.get(self);
       const peerList = symbols.peers(symbol, 5, sector);
-      const rows = [{ symbol: self, name: null, isSelf: true }, ...peerList.map((p) => ({ symbol: p.symbol, name: p.name, isSelf: false }))]
-        .map((t) => ({ symbol: t.symbol, name: t.name || t.symbol, peRatio: null, marketCap: null, roce: null, isSelf: t.isSelf, mock: true }));
-      return { sector: sector || null, rows, source: 'dictionary' };
+
+      // Fetch each company's real ratios (from its Screener page) in parallel.
+      const rows = await Promise.all([
+        peerRatios(self, dictSelf && dictSelf.name).then((r) => ({ ...r, isSelf: true })),
+        ...peerList.map((p) => peerRatios(p.symbol, p.name).then((r) => ({ ...r, isSelf: false }))),
+      ]);
+      return { sector: sector || null, rows, source: 'screener' };
     });
     res.json({ symbol, cached: !!cached, ...data });
   } catch (err) {
